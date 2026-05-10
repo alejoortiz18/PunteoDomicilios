@@ -1,0 +1,110 @@
+using System.Net;
+using PunteoDomicilios.Web.Middleware;
+using PunteoDomicilios.Web.Repositories;
+using PunteoDomicilios.Web.Services;
+using Serilog;
+
+// ── Logging con Serilog ───────────────────────────────────────────────────────
+Log.Logger = new LoggerConfiguration()
+    .WriteTo.Console()
+    .CreateBootstrapLogger();
+
+try
+{
+    var builder = WebApplication.CreateBuilder(args);
+
+    // Serilog desde appsettings.json
+    builder.Host.UseSerilog((ctx, services, cfg) => cfg
+        .ReadFrom.Configuration(ctx.Configuration)
+        .ReadFrom.Services(services)
+        .WriteTo.Console()
+        .WriteTo.File("logs/punteo-.txt",
+            rollingInterval: RollingInterval.Day,
+            retainedFileCountLimit: 30));
+
+    // ── MVC ──────────────────────────────────────────────────────────────────
+    builder.Services.AddControllersWithViews();
+    builder.Services.AddMemoryCache();
+
+    // ── Sesión (equivalente al sessionStorage del prototipo) ──────────────────
+    builder.Services.AddDistributedMemoryCache();
+    builder.Services.AddSession(options =>
+    {
+        options.Cookie.Name = ".PunteoDomicilios.Session";
+        options.IdleTimeout = TimeSpan.FromHours(8);
+        options.Cookie.HttpOnly = true;
+        options.Cookie.IsEssential = true;
+    });
+
+    // ── Repositorios y Servicios ──────────────────────────────────────────────
+    builder.Services.AddScoped<IMensajeroRepository, MensajeroRepository>();
+    builder.Services.AddScoped<IMensajeroService, MensajeroService>();
+
+    // ── HttpClient API interna (con retry y timeout) ──────────────────────────
+    var apiConfig = builder.Configuration.GetSection("ApiInterna");
+    var timeoutSeconds = apiConfig.GetValue("TimeoutSeconds", 10);
+    var retryCount = apiConfig.GetValue("RetryCount", 2);
+    var token = apiConfig["Token"] ?? string.Empty;
+    var apiBaseUrl = apiConfig["BaseUrl"] ?? throw new InvalidOperationException("ApiInterna:BaseUrl no configurado.");
+
+    builder.Services.AddHttpClient<ISoporteApiService, SoporteApiService>(client =>
+    {
+        client.BaseAddress = new Uri(apiBaseUrl);
+        client.Timeout = TimeSpan.FromSeconds(timeoutSeconds + (retryCount * timeoutSeconds));
+        if (!string.IsNullOrWhiteSpace(token))
+            client.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+    })
+    .AddStandardResilienceHandler(options =>
+    {
+        options.Retry.MaxRetryAttempts = retryCount;
+        options.AttemptTimeout.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
+    });
+
+    // ── HttpClient Descarga (Basic Auth) ──────────────────────────────────────
+    var descargaConfig = builder.Configuration.GetSection("DescargaInterna");
+    var descargaBaseUrl = descargaConfig["BaseUrl"] ?? apiBaseUrl;
+    var descargaUsuario = descargaConfig["Usuario"] ?? string.Empty;
+    var descargaPassword = descargaConfig["Password"] ?? string.Empty;
+
+    builder.Services.AddHttpClient<IDescargaService, DescargaService>(client =>
+    {
+        client.BaseAddress = new Uri(descargaBaseUrl);
+    })
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+    {
+        Credentials = string.IsNullOrWhiteSpace(descargaUsuario)
+            ? CredentialCache.DefaultCredentials
+            : new NetworkCredential(descargaUsuario, descargaPassword)
+    });
+
+    // ── Build ─────────────────────────────────────────────────────────────────
+    var app = builder.Build();
+
+    app.UseMiddleware<GlobalExceptionMiddleware>();
+
+    if (!app.Environment.IsDevelopment())
+    {
+        app.UseHsts();
+    }
+
+    app.UseHttpsRedirection();
+    app.UseStaticFiles();
+    app.UseRouting();
+    app.UseSession();
+    app.UseAuthorization();
+
+    app.MapControllerRoute(
+        name: "default",
+        pattern: "{controller=Dashboard}/{action=Index}/{id?}");
+
+    app.Run();
+}
+catch (Exception ex)
+{
+    Log.Fatal(ex, "La aplicación falló al iniciar");
+}
+finally
+{
+    Log.CloseAndFlush();
+}

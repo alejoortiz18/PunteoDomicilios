@@ -1,0 +1,102 @@
+﻿@{
+    ViewData["Title"] = "Dashboard";
+    Layout = "_Layout";
+    var usuario = ViewBag.Usuario as string ?? "";
+}
+
+<!-- Consulta por fecha -->
+<section class="section-card mt-4">
+    <div class="section-header">
+        <h2 class="section-title">🔍 Consulta por fecha</h2>
+    </div>
+    <div class="row g-3 align-items-end">
+        <div class="col-md-4">
+            <label class="form-label fw-semibold small">📅 Fecha</label>
+            <input type="date" id="inputFecha" class="form-control"
+                   value="@DateOnly.FromDateTime(DateTime.Today).ToString("yyyy-MM-dd")" />
+        </div>
+        <div class="col-md-3">
+            <button id="btnConsultar" class="btn btn-primary w-100" onclick="iniciarConsulta()">
+                <span id="spinnerConsulta" class="spinner-border spinner-border-sm d-none me-1"></span>
+                🔍 Iniciar Consulta
+            </button>
+        </div>
+    </div>
+    <div id="areaProgreso" class="progreso-container mt-3 d-none">
+        <div class="d-flex justify-content-between mb-1 small text-muted">
+            <span>Consultando soportes...</span>
+            <span id="progContador">0 / 0</span>
+        </div>
+        <div class="progress-batch">
+            <div id="progFill" class="progress-batch__fill" style="width:0%"></div>
+        </div>
+        <div class="mt-2 small">
+            <span id="progEntregados" class="text-success">✅ 0 entregados</span>
+            &nbsp;
+            <span id="progFaltantes" class="text-danger">❌ 0 faltantes</span>
+        </div>
+    </div>
+</section>
+
+<!-- KPIs -->
+<section id="areaKpi" class="kpi-row mt-4 d-none">
+    <div class="kpi-card kpi-blue">
+        <div class="kpi-label">Total Registros</div>
+        <div class="kpi-value" id="kpiTotal">0</div>
+    </div>
+    <div class="kpi-card kpi-green">
+        <div class="kpi-label">Total Cuota Mod</div>
+        <div class="kpi-value" id="kpiCuota">$0</div>
+    </div>
+    <div class="kpi-card kpi-cyan">
+        <div class="kpi-label">Planillas Distintas</div>
+        <div class="kpi-value" id="kpiPlanillas">0</div>
+    </div>
+    <div class="kpi-card kpi-purple">
+        <div class="kpi-label">Con Soporte</div>
+        <div class="kpi-value" id="kpiSoporte">0%</div>
+    </div>
+</section>
+
+<!-- Charts -->
+<div id="areaCharts" class="charts-row mt-4 d-none">
+    <div class="section-card chart-card">
+        <h3 class="section-title small mb-3">📈 Últimos 7 días</h3>
+        <canvas id="chartTimeline" height="140"></canvas>
+    </div>
+    <div class="section-card chart-card">
+        <h3 class="section-title small mb-3">🍩 Estado del día</h3>
+        <canvas id="chartDonut" height="140"></canvas>
+    </div>
+</div>
+
+<!-- Resumen mensual -->
+<section class="section-card mt-4" id="seccionResumen">
+    <div class="section-header">
+        <h2 class="section-title">📅 Resumen mensual</h2>
+    </div>
+    <div id="resumenLoading" class="skeleton-rows">
+        <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>
+    </div>
+    <div id="resumenTabla" class="d-none">
+        <table class="punteo-table">
+            <thead>
+                <tr>
+                    <th>Mes / Año</th>
+                    <th class="text-end">Total Registros</th>
+                    <th class="text-end">Planillas</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody id="resumenTbody"></tbody>
+        </table>
+        <div id="pagResumen" class="tabla-footer d-none"></div>
+    </div>
+    <div id="resumenVacio" class="empty-state d-none">
+        <span>📭</span><p>No hay registros en la base de datos para este usuario.</p>
+    </div>
+</section>
+
+@section Scripts {
+<script src="~/js/dashboard.js"></script>
+}

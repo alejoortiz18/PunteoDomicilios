@@ -1,0 +1,90 @@
+@{
+    ViewData["Title"] = $"Detalle {ViewBag.MesLabel}";
+    Layout = "_Layout";
+    var mes = ViewBag.Mes as string ?? "";
+    var mesLabel = ViewBag.MesLabel as string ?? mes;
+    var usuario = ViewBag.Usuario as string ?? "";
+}
+
+<!-- Breadcrumb -->
+<nav class="breadcrumb-punteo" aria-label="breadcrumb">
+    <a asp-controller="Dashboard" asp-action="Index">Dashboard</a>
+    <span> › </span>
+    <span>@mesLabel</span>
+</nav>
+
+<!-- Nivel 1: Días del mes -->
+<section class="section-card" id="seccionDias">
+    <div class="section-header">
+        <h2 class="section-title">📅 Días — @mesLabel</h2>
+    </div>
+    <div id="diasLoading" class="skeleton-rows">
+        <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>
+    </div>
+    <div id="diasTabla" class="d-none">
+        <table class="punteo-table">
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th class="text-end">Total Registros</th>
+                    <th class="text-end">Planillas</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody id="diasTbody"></tbody>
+        </table>
+        <div id="pagDias" class="tabla-footer d-none"></div>
+    </div>
+    <div id="diasVacio" class="empty-state d-none">
+        <span>📭</span><p>No hay registros para @mesLabel.</p>
+    </div>
+</section>
+
+<!-- Nivel 2: Panel de registros del día (se inyecta aquí) -->
+<div id="panelDia" class="d-none mt-4">
+    <section class="section-card">
+        <div class="section-header">
+            <h2 class="section-title" id="panelDiaTitulo">📋 Registros del día</h2>
+            <button class="btn btn-sm btn-outline-secondary" onclick="cerrarPanel()">✕ Cerrar</button>
+        </div>
+
+        <!-- Barra de progreso batch -->
+        <div id="panelProgreso" class="progreso-container mb-3 d-none">
+            <div class="d-flex justify-content-between mb-1 small text-muted">
+                <span>Verificando soportes...</span>
+                <span id="panelProgContador">0 / 0</span>
+            </div>
+            <div class="progress-batch">
+                <div id="panelProgFill" class="progress-batch__fill" style="width:0%"></div>
+            </div>
+        </div>
+
+        <div id="panelLoading" class="skeleton-rows d-none">
+            <div class="skeleton"></div><div class="skeleton"></div>
+        </div>
+
+        <div id="panelTabla" class="d-none">
+            <table class="punteo-table">
+                <thead>
+                    <tr>
+                        <th>Nrodcto</th>
+                        <th>Destino</th>
+                        <th class="text-end">Cuota Mod</th>
+                        <th>Nro. Planilla</th>
+                        <th>Estado</th>
+                        <th>Acción</th>
+                    </tr>
+                </thead>
+                <tbody id="panelTbody"></tbody>
+            </table>
+            <div id="pagPanel" class="tabla-footer d-none"></div>
+        </div>
+    </section>
+</div>
+
+@section Scripts {
+<script>
+    const MES_ACTUAL = '@mes';
+</script>
+<script src="~/js/detalle.js"></script>
+}

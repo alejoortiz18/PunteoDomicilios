@@ -1,0 +1,69 @@
+@model List<string>
+@{
+    ViewData["Title"] = "Iniciar sesión";
+    Layout = null; // Login page has no sidebar
+    var loginError = TempData["Error"] as string;
+}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Punteo de Domicilios — Iniciar sesión</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/punteo.css" />
+</head>
+<body class="login-page">
+    @if (loginError != null)
+    {
+        <div class="modal fade" id="modalLoginError" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered modal-sm">
+                <div class="modal-content">
+                    <div class="modal-header bg-danger text-white">
+                        <h5 class="modal-title">Error al iniciar sesión</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">@loginError</div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    <div class="login-card">
+        <div class="login-brand">
+            <div class="login-icon">💊</div>
+            <div class="login-brand-name">HELPHARMA</div>
+            <div class="login-brand-sub">Punteo de Domicilios</div>
+        </div>
+
+        <form method="post" action="/login">
+            @Html.AntiForgeryToken()
+            <div class="mb-3">
+                <label class="form-label fw-semibold">👤 Selecciona tu usuario</label>
+                <select name="usuario" class="form-select" required>
+                    <option value="">— Selecciona —</option>
+                    @foreach (var u in Model)
+                    {
+                        <option value="@u">@u</option>
+                    }
+                </select>
+                <div class="form-text">Estos usuarios provienen de la base de datos HELPHARMA.</div>
+            </div>
+            <button type="submit" class="btn btn-primary w-100">
+                Entrar al sistema →
+            </button>
+        </form>
+    </div>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    @if (loginError != null)
+    {
+        <script>
+            document.addEventListener('DOMContentLoaded', function () {
+                new bootstrap.Modal(document.getElementById('modalLoginError')).show();
+            });
+        </script>
+    }
+</body>
+</html>

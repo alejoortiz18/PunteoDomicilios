@@ -1,0 +1,130 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] — Punteo Domicilios</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/punteo.css" asp-append-version="true" />
+    @await RenderSectionAsync("Styles", required: false)
+</head>
+<body class="punteo-layout">
+
+@{
+    var usuarioActual = Context.Session.GetString("punteo_usuario") ?? "";
+    var initial = usuarioActual.Length >= 2 ? usuarioActual[..2] : usuarioActual;
+    var controller = ViewContext.RouteData.Values["controller"]?.ToString()?.ToLower() ?? "";
+}
+
+<!-- ── Sidebar ──────────────────────────────────────────────── -->
+<aside class="punteo-sidebar">
+    <a class="sidebar-brand" asp-controller="Dashboard" asp-action="Index">
+        <span class="brand-icon">💊</span>
+        <div>
+            <div class="brand-name">HELPHARMA</div>
+            <div class="brand-sub">Punteo de Domicilios</div>
+        </div>
+    </a>
+
+    <nav class="sidebar-nav">
+        <a class="nav-item @(controller == "dashboard" ? "active" : "")"
+           asp-controller="Dashboard" asp-action="Index">
+            <span class="nav-icon">📊</span>
+            <span>Dashboard</span>
+        </a>
+        <a class="nav-item @(controller == "detalle" ? "active" : "")"
+           asp-controller="Detalle" asp-action="Index">
+            <span class="nav-icon">📄</span>
+            <span>Detalle mes</span>
+        </a>
+    </nav>
+
+    @if (!string.IsNullOrEmpty(usuarioActual))
+    {
+        <div class="sidebar-footer">
+            <div class="user-chip">
+                <span class="chip-initial">@initial</span>
+                <span class="chip-name-sidebar">@usuarioActual</span>
+            </div>
+            <a class="btn-cambiar" asp-controller="Login" asp-action="Index"
+               asp-route-cambiar="true">↩ Cambiar</a>
+        </div>
+    }
+</aside>
+
+<!-- ── Main ────────────────────────────────────────────────── -->
+<div class="punteo-main">
+    <!-- Topbar -->
+    <header class="punteo-topbar">
+        <h1 class="topbar-title">@(ViewData["Title"] ?? "Punteo de Domicilios")</h1>
+        @if (!string.IsNullOrEmpty(usuarioActual))
+        {
+            <a class="topbar-user" asp-controller="Login" asp-action="Index"
+               asp-route-cambiar="true" title="Cambiar usuario">
+                <span class="chip-initial chip-initial--sm">@initial</span>
+                <span class="chip-name">@usuarioActual</span>
+            </a>
+        }
+    </header>
+
+    <!-- Content -->
+    <main class="punteo-content">
+        @RenderBody()
+    </main>
+</div>
+
+<!-- ── Modal soporte (global) ──────────────────────────────── -->
+<div class="modal fade" id="modalSoporte" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">🗂 Soporte encontrado</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="modalSoporteBody"></div>
+            <div class="modal-footer">
+                <a id="modalDescargaLink" href="#" target="_blank"
+                   class="btn btn-primary">⬇ Descargar PDF</a>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Modal de mensajes globales ───────────────────────────── -->
+<div class="modal fade" id="modalMensaje" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header" id="modalMensajeHeader">
+                <h5 class="modal-title" id="modalMensajeTitulo"></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="modalMensajeBody"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="~/lib/jquery/dist/jquery.min.js"></script>
+<script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="~/js/paginacion.js" asp-append-version="true"></script>
+<script>
+    function mostrarModal(titulo, mensaje, tipo) {
+        const clases = {
+            error:   'modal-header bg-danger text-white',
+            warning: 'modal-header bg-warning text-dark',
+            info:    'modal-header bg-info text-dark',
+            success: 'modal-header bg-success text-white'
+        };
+        document.getElementById('modalMensajeHeader').className = clases[tipo] ?? 'modal-header';
+        document.getElementById('modalMensajeTitulo').textContent = titulo;
+        document.getElementById('modalMensajeBody').textContent = mensaje;
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('modalMensaje')).show();
+    }
+</script>
+@await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>
