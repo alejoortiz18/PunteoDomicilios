@@ -1,0 +1,19 @@
+{
+  "name": "punteo-domicilios-playwright-tests",
+  "version": "1.0.0",
+  "description": "Pruebas Playwright para Punteo de Domicilios",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:bd": "playwright test tests/mostrar-datos-bd.spec.ts --headed",
+    "test:bd:slow": "playwright test tests/mostrar-datos-bd.spec.ts --headed --slow-mo=800",
+    "test:e2e": "playwright test -g \"BD-11\" --headed",
+    "test:consulta": "playwright test tests/iniciar-consulta.spec.ts --headed",
+    "test:consulta:slow": "playwright test tests/iniciar-consulta.spec.ts --headed --slow-mo=600",
+    "report": "playwright show-report resultadosPruebas/playwright-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.44.0",
+    "@types/node": "^20.0.0"
+  }
+}

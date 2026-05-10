@@ -74,9 +74,10 @@ public class MensajeroRepository : IMensajeroRepository
     {
         const string sql = """
             SELECT
-                FORMAT(Fecha, 'yyyy-MM')         AS Mes,
-                COUNT(*)                          AS TotalRegistros,
-                COUNT(DISTINCT NroPlanilla)       AS TotalPlanillas
+                FORMAT(Fecha, 'yyyy-MM')                    AS Mes,
+                COUNT(*)                                    AS TotalRegistros,
+                COUNT(DISTINCT NroPlanilla)                 AS TotalPlanillas,
+                COUNT(DISTINCT CAST(Fecha AS DATE))         AS CantidadDias
             FROM MvMensajer
             WHERE Usuario = @Usuario
             GROUP BY FORMAT(Fecha, 'yyyy-MM')
@@ -92,7 +93,7 @@ public class MensajeroRepository : IMensajeroRepository
         {
             string mes = (string)r.Mes;
             var label = FormatMesLabel(mes);
-            return new ResumenMensualDto(mes, label, (int)r.TotalRegistros, (int)r.TotalPlanillas);
+            return new ResumenMensualDto(mes, label, (int)r.TotalRegistros, (int)r.TotalPlanillas, (int)r.CantidadDias);
         });
     }
 

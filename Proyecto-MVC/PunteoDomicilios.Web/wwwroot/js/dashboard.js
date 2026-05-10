@@ -33,10 +33,10 @@ async function cargarResumenMensual() {
             <tr>
                 <td><strong>${esc(m.label)}</strong></td>
                 <td class="text-end">${fmtNum.format(m.totalRegistros)}</td>
-                <td class="text-end">${fmtNum.format(m.totalPlanillas)}</td>
+                <td class="text-end">${fmtNum.format(m.cantidadDias)}</td>
                 <td class="text-end">
                     <a href="/detalle?mes=${esc(m.mes)}" class="btn btn-sm btn-outline-primary">
-                        Ver detalle →
+                        📋 Ver detalle
                     </a>
                 </td>
             </tr>`);
@@ -274,3 +274,5 @@ function esc(v) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
 }
+
+
