@@ -1,0 +1,4 @@
+Usando la configuraci√≥n de inicio de C:\Users\alejandro.ortiz\Documents\helpharma\Desarrollos\PunteoDomicilios\PunteoDomicilios\Proyecto-MVC\PunteoDomicilios.Web\Properties\launchSettings.json...
+[16:07:24 WRN] Failed to determine the https port for redirect.
+[16:07:24 DBG] Obteniendo lista de usuarios £nicos
+[16:07:50 DBG] Obteniendo lista de usuarios £nicos

@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/Proyecto-MVC/">
+    <Project Path="Proyecto-MVC/PunteoDomicilios.Web/PunteoDomicilios.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/PunteoDomicilios.Tests/PunteoDomicilios.Tests.csproj" />
+  </Folder>
+</Solution>
