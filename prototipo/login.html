@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Iniciar sesión — Punteo de Domicilios · HELPHARMA</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: #0f172a;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* ── Animated background ─────────────────────────────────── */
+    .bg-blob {
+      position: fixed;
+      border-radius: 50%;
+      filter: blur(90px);
+      opacity: 0.18;
+      pointer-events: none;
+      will-change: transform;
+    }
+    .blob-1 { width: 640px; height: 640px; background: #2563eb; top: -240px; left: -180px; animation: drift 20s ease-in-out infinite; }
+    .blob-2 { width: 420px; height: 420px; background: #7c3aed; bottom: -120px; right: -100px; animation: drift 26s ease-in-out infinite reverse; }
+    .blob-3 { width: 320px; height: 320px; background: #0891b2; top: 45%; left: 45%; animation: drift 16s ease-in-out infinite 4s; }
+    @keyframes drift {
+      0%,100% { transform: translate(0,0) scale(1); }
+      33%      { transform: translate(28px,-22px) scale(1.04); }
+      66%      { transform: translate(-18px,24px) scale(0.97); }
+    }
+
+    /* ── Login card ───────────────────────────────────────────── */
+    .login-card {
+      position: relative; z-index: 1;
+      background: #ffffff;
+      border-radius: 24px;
+      padding: 48px 44px 40px;
+      width: 100%; max-width: 420px;
+      box-shadow: 0 32px 80px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.06);
+      animation: card-in .5s cubic-bezier(.34,1.4,.64,1) both;
+    }
+    @keyframes card-in {
+      from { opacity: 0; transform: scale(.88) translateY(28px); }
+      to   { opacity: 1; transform: none; }
+    }
+
+    /* ── Brand ───────────────────────────────────────────────── */
+    .brand {
+      display: flex; align-items: center; gap: 14px;
+      margin-bottom: 32px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid #f3f4f6;
+    }
+    .brand-icon {
+      width: 52px; height: 52px; border-radius: 14px; flex-shrink: 0;
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      display: flex; align-items: center; justify-content: center; font-size: 26px;
+      box-shadow: 0 4px 16px rgba(37,99,235,.38);
+    }
+    .brand-name { font-size: 18px; font-weight: 700; color: #111827; line-height: 1.2; }
+    .brand-sub  { font-size: 11px; color: #9ca3af; margin-top: 1px; }
+
+    /* ── Headings ─────────────────────────────────────────────── */
+    .login-title { font-size: 21px; font-weight: 700; color: #111827; margin-bottom: 6px; }
+    .login-sub   { font-size: 13px; color: #6b7280; margin-bottom: 28px; line-height: 1.65; }
+
+    /* ── Form ─────────────────────────────────────────────────── */
+    .form-label {
+      display: block; font-size: 13px; font-weight: 600;
+      color: #374151; margin-bottom: 7px;
+    }
+    .input-wrap { position: relative; }
+    .input-icon {
+      position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+      font-size: 16px; pointer-events: none; user-select: none;
+    }
+    .form-input {
+      display: block; width: 100%;
+      padding: 13px 16px 13px 42px;
+      font-size: 15px; font-family: inherit; font-weight: 600;
+      border: 2px solid #e5e7eb; border-radius: 10px;
+      color: #111827; background: #fff;
+      transition: border-color .2s, box-shadow .2s;
+      text-transform: uppercase; letter-spacing: .06em;
+      outline: none;
+    }
+    .form-input::placeholder { text-transform: none; letter-spacing: 0; color: #9ca3af; font-weight: 400; }
+    .form-input:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,.12); }
+    .form-input.error {
+      border-color: #dc2626; box-shadow: 0 0 0 3px rgba(220,38,38,.1);
+      animation: shake .38s ease;
+    }
+    @keyframes shake {
+      0%,100% { transform: translateX(0); }
+      20%     { transform: translateX(-7px); }
+      40%     { transform: translateX(7px); }
+      60%     { transform: translateX(-4px); }
+      80%     { transform: translateX(4px); }
+    }
+    .form-hint { font-size: 11px; color: #9ca3af; margin-top: 6px; }
+
+    /* ── Button ───────────────────────────────────────────────── */
+    .btn-login {
+      width: 100%; padding: 14px; margin-top: 22px;
+      background: #2563eb; color: #fff; border: none; border-radius: 10px;
+      font-size: 15px; font-weight: 600; font-family: inherit;
+      cursor: pointer; letter-spacing: .01em;
+      transition: background .15s, transform .1s, box-shadow .15s;
+      box-shadow: 0 4px 16px rgba(37,99,235,.35);
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .btn-login:hover:not(:disabled) { background: #1d4ed8; box-shadow: 0 6px 20px rgba(37,99,235,.42); }
+    .btn-login:active { transform: scale(.98); }
+    .btn-login:disabled { background: #bfdbfe; box-shadow: none; cursor: not-allowed; color: #93c5fd; }
+
+    .login-footer { text-align: center; margin-top: 22px; font-size: 11px; color: #d1d5db; }
+
+    /* ── Spinner ──────────────────────────────────────────────── */
+    .spinner {
+      width: 16px; height: 16px; border: 2.5px solid rgba(255,255,255,.35);
+      border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Error modal ──────────────────────────────────────────── */
+    .modal-bg {
+      position: fixed; inset: 0; z-index: 999;
+      background: rgba(0,0,0,.65); backdrop-filter: blur(6px);
+      display: flex; align-items: center; justify-content: center; padding: 24px;
+      opacity: 0; pointer-events: none;
+      transition: opacity .25s ease;
+    }
+    .modal-bg.open { opacity: 1; pointer-events: auto; }
+    .modal-box {
+      background: #fff; border-radius: 20px; padding: 36px 32px 30px;
+      max-width: 400px; width: 100%;
+      box-shadow: 0 24px 64px rgba(0,0,0,.45);
+      transform: scale(.88) translateY(20px);
+      transition: transform .3s cubic-bezier(.34,1.25,.64,1);
+    }
+    .modal-bg.open .modal-box { transform: none; }
+
+    .modal-icon  { font-size: 52px; text-align: center; margin-bottom: 14px; }
+    .modal-title { font-size: 17px; font-weight: 700; color: #111827; margin-bottom: 8px; text-align: center; }
+    .modal-body  { font-size: 13px; color: #4b5563; line-height: 1.7; text-align: center; margin-bottom: 16px; }
+    .modal-user  {
+      display: inline-block; font-weight: 700; color: #dc2626;
+      background: #fef2f2; padding: 1px 8px; border-radius: 5px;
+      font-family: 'Courier New', monospace; font-size: 14px; letter-spacing: .05em;
+    }
+    .modal-hint {
+      background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px;
+      padding: 13px 15px; font-size: 12px; color: #6b7280;
+      margin-bottom: 20px; line-height: 1.7;
+    }
+    .modal-hint strong { color: #374151; display: block; margin-bottom: 2px; }
+    .modal-hint code {
+      background: #f3f4f6; border-radius: 4px; padding: 1px 5px;
+      font-family: 'Courier New', monospace; font-size: 11px; color: #374151;
+    }
+    .btn-retry {
+      width: 100%; padding: 12px; background: #2563eb; color: #fff; border: none;
+      border-radius: 9px; font-size: 14px; font-weight: 600; font-family: inherit;
+      cursor: pointer; transition: background .15s;
+    }
+    .btn-retry:hover { background: #1d4ed8; }
+
+    @media (max-width: 480px) {
+      .login-card { padding: 32px 20px 26px; }
+      .modal-box  { padding: 28px 20px 24px; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="bg-blob blob-1"></div>
+  <div class="bg-blob blob-2"></div>
+  <div class="bg-blob blob-3"></div>
+
+  <div class="login-card">
+    <div class="brand">
+      <div class="brand-icon">💊</div>
+      <div>
+        <div class="brand-name">HELPHARMA</div>
+        <div class="brand-sub">Sistema de Punteo de Domicilios</div>
+      </div>
+    </div>
+
+    <div class="login-title">Iniciar sesión</div>
+    <div class="login-sub">
+      Ingresa tu código de usuario para acceder.<br>
+      No se requiere contraseña.
+    </div>
+
+    <label class="form-label" for="inp-user">Usuario del sistema</label>
+    <div class="input-wrap">
+      <span class="input-icon">👤</span>
+      <input
+        type="text"
+        id="inp-user"
+        class="form-input"
+        placeholder="Ej. MMUNOZ, JGARCIA…"
+        autocomplete="off"
+        autocapitalize="characters"
+        spellcheck="false"
+        maxlength="20"
+        oninput="this.value = this.value.toUpperCase().replace(/\s/g,'')"
+        onkeydown="if(event.key === 'Enter') doLogin()"
+      />
+    </div>
+    <div class="form-hint">Ingresa el código en mayúsculas tal como aparece en el sistema.</div>
+
+    <button class="btn-login" id="btn-login" onclick="doLogin()">
+      <span id="btn-txt">Ingresar al sistema →</span>
+    </button>
+
+    <div class="login-footer">HELPHARMA S.A.S · Sistema interno · Prototipo v1.0</div>
+  </div>
+
+  <!-- ── Error modal ──────────────────────────────────────────── -->
+  <div class="modal-bg" id="err-modal" onclick="handleModalClick(event)">
+    <div class="modal-box">
+      <div class="modal-icon">⚠️</div>
+      <div class="modal-title">Usuario no encontrado</div>
+      <div class="modal-body">
+        El usuario <span class="modal-user" id="err-user-tag"></span> no está registrado
+        en el sistema de <strong>Punteo de Domicilios</strong>.
+      </div>
+      <div class="modal-hint">
+        <strong>Posibles causas</strong>
+        · El código de usuario no existe en el sistema.<br>
+        · Puede contener espacios o caracteres incorrectos.<br>
+        · El usuario puede estar inactivo o no tener acceso.<br><br>
+        <strong>Formato esperado</strong>
+        Código en mayúsculas sin espacios. Ejemplos: <code>MMUNOZ</code>, <code>JGARCIA</code>, <code>CMARTINEZ</code><br><br>
+        Si el problema persiste, contacta al administrador del sistema.
+      </div>
+      <button class="btn-retry" onclick="closeError()">↩ Reintentar con otro usuario</button>
+    </div>
+  </div>
+
+  <script src="shared.js"></script>
+  <script>
+    // ── Handle ?cambiar param (redirect from sidebar/topbar) ──
+    const _params = new URLSearchParams(window.location.search);
+    if (_params.has('cambiar')) {
+      clearCurrentUser();
+    } else if (getCurrentUser()) {
+      // Already logged in → go straight to the app
+      window.location.replace('index.html');
+    }
+
+    // ── Auto-focus the input ────────────────────────────────────
+    document.getElementById('inp-user').focus();
+
+    // ── Login logic ─────────────────────────────────────────────
+    function doLogin() {
+      const raw = document.getElementById('inp-user').value.trim();
+      const inp = document.getElementById('inp-user');
+
+      if (!raw) {
+        shakeInput(inp);
+        inp.focus();
+        return;
+      }
+
+      const found = BODEGAS.find(b => b.code === raw);
+      if (found) {
+        // Valid user → save session and enter the app
+        const btn = document.getElementById('btn-login');
+        btn.disabled = true;
+        document.getElementById('btn-txt').innerHTML =
+          '<div class="spinner"></div> Accediendo…';
+        setCurrentUser(found.code);
+        setTimeout(() => { window.location.href = 'index.html'; }, 500);
+      } else {
+        // Invalid user → show error modal
+        shakeInput(inp);
+        document.getElementById('err-user-tag').textContent = raw;
+        openError();
+      }
+    }
+
+    function shakeInput(el) {
+      el.classList.remove('error');
+      void el.offsetWidth; // reflow to restart animation
+      el.classList.add('error');
+      setTimeout(() => el.classList.remove('error'), 600);
+    }
+
+    function openError() {
+      document.getElementById('err-modal').classList.add('open');
+    }
+
+    function closeError() {
+      document.getElementById('err-modal').classList.remove('open');
+      const inp = document.getElementById('inp-user');
+      inp.value = '';
+      inp.focus();
+    }
+
+    function handleModalClick(e) {
+      if (e.target === document.getElementById('err-modal')) closeError();
+    }
+
+    // Close modal with Escape key
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') closeError();
+    });
+  </script>
+</body>
+</html>

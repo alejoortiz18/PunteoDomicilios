@@ -1,0 +1,297 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Detalle Mensual â€” Punteo de Domicilios Â· HELPHARMA</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="shared.css" />
+  <script src="datos-reales.js" onerror="console.warn('datos-reales.js no encontrado â€” usando datos mock')"></script>
+  <style>
+    .tbl-currency { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+    .mono { font-family:'Courier New',monospace; font-size:12px; }
+    .day-panel {
+      background:var(--neutral-50); border:1px solid var(--neutral-200);
+      border-radius:10px; margin:0 0 8px; overflow:hidden;
+      animation:fadeIn .2s ease;
+    }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:none; } }
+    .day-panel-header {
+      padding:12px 20px; background:#fff; border-bottom:1px solid var(--neutral-200);
+      display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;
+    }
+    .day-panel-title { font-weight:700; color:var(--neutral-900); font-size:14px; }
+    .day-panel .table-wrap { max-height:420px; overflow-y:auto; }
+    .modal-backdrop {
+      display:none; position:fixed; inset:0; background:rgba(15,23,42,.5);
+      z-index:1000; align-items:center; justify-content:center; padding:24px;
+    }
+    .modal-backdrop.open { display:flex; }
+    .modal-box {
+      background:#fff; border-radius:16px; box-shadow:0 24px 48px rgba(0,0,0,.18);
+      max-width:560px; width:100%; padding:32px; position:relative;
+    }
+    .modal-close {
+      position:absolute; top:14px; right:14px; border:none; background:none;
+      font-size:20px; cursor:pointer; color:var(--neutral-400); padding:4px 8px;
+      border-radius:6px; transition:background .15s;
+    }
+    .modal-close:hover { background:var(--neutral-100); }
+    .path-chip {
+      background:var(--neutral-50); border:1px solid var(--neutral-200);
+      border-radius:8px; padding:10px 14px; font-size:12px;
+      font-family:'Courier New',monospace; color:var(--neutral-700);
+      word-break:break-all; line-height:1.6; margin-top:8px;
+    }
+  </style>
+</head>
+<body>
+<div class="main">
+  <div class="page-body">
+
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;flex-wrap:wrap">
+      <button class="btn btn-ghost btn-sm" onclick="history.back()">â† Volver</button>
+      <h2 style="font-size:16px;font-weight:700;color:var(--neutral-900)" id="page-title">Cargandoâ€¦</h2>
+    </div>
+
+    <!-- Level 1: days table -->
+    <div class="card mb-6">
+      <div class="card-header">
+        <div>
+          <div class="card-title">ðŸ“… DÃ­as del mes</div>
+          <div class="card-sub" id="days-sub">Cargandoâ€¦</div>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Fecha</th>
+            <th style="text-align:right">Total Soportes</th>
+            <th style="text-align:right">âœ… Entregados</th>
+            <th style="text-align:right">âŒ Faltantes</th>
+            <th></th>
+          </tr></thead>
+          <tbody id="days-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Level 2: expandable record panel (injected below selected row) -->
+    <div id="detail-panel-container"></div>
+
+    <div class="empty-state" id="empty-state" style="display:none">
+      <div class="empty-icon">ðŸ“‹</div>
+      <h3>Sin registros</h3>
+      <p>No hay datos para este mes y usuario.</p>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Ver soporte -->
+<div class="modal-backdrop" id="modal-soporte">
+  <div class="modal-box">
+    <button class="modal-close" onclick="closeModal('modal-soporte')">âœ•</button>
+    <div class="card-title mb-2" id="modal-title">Soporte de documento</div>
+    <div class="text-sm text-muted mb-4" id="modal-sub"></div>
+    <div id="modal-body"></div>
+    <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--neutral-100);
+                font-size:12px;color:var(--neutral-400)">
+      âš ï¸ Para descargar el PDF es necesario tener sesiÃ³n activa en
+      <strong>intranet.helpharma.com</strong>. El enlace requiere autenticaciÃ³n Bearer.
+    </div>
+    <div style="display:flex;justify-content:flex-end;margin-top:16px">
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('modal-soporte')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container" id="toast-container"></div>
+<script src="shared.js"></script>
+<script>
+  buildSidebar('detalle');
+
+  const params  = new URLSearchParams(window.location.search);
+  const mes     = params.get('mes') || new Date().toISOString().substring(0, 7);
+
+  let selectedFecha = null;
+
+  requireUser(function(usuario) {
+    const mesLabel = formatMesLabel(mes);
+    document.title = `${mesLabel} â€” Detalle Â· HELPHARMA`;
+    document.getElementById('page-title').textContent = `Detalle: ${mesLabel} â€” ${usuario}`;
+    buildTopbar('Detalle Mensual', mesLabel, `<a href="index.html" class="btn btn-ghost btn-sm">ðŸ  Dashboard</a>`);
+    renderDays(usuario, mes);
+  });
+
+  function esc(v) {
+    if (v == null) return '<span style="color:var(--neutral-300)">â€”</span>';
+    return String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  // â”€â”€ Level 1: days â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  function renderDays(usuario, mes) {
+    const fechas = getFechasDelMes(usuario, mes);
+    const body   = document.getElementById('days-body');
+    const sub    = document.getElementById('days-sub');
+
+    if (!fechas.length) {
+      // Fallback: try mock data for today
+      const hoy = new Date().toISOString().substring(0, 10);
+      if (hoy.startsWith(mes)) {
+        // Show mock row
+        const mockCount = 22;
+        const mockFound = 18;
+        body.innerHTML = buildDayRow(hoy, mockCount, mockFound, true);
+        sub.textContent = '1 dÃ­a (datos de ejemplo â€” datos-reales.js pendiente)';
+      } else {
+        document.getElementById('empty-state').style.display = 'flex';
+        sub.textContent = 'Sin registros';
+      }
+      return;
+    }
+
+    let totalRows = 0;
+    const rows = fechas.map(fecha => {
+      const registros = getDatosDelDia(usuario, fecha);
+      totalRows += registros.length;
+      let found = 0;
+      registros.forEach(r => { if (mockConsultaSoporte(r[0]).success) found++; });
+      return buildDayRow(fecha, registros.length, found, false);
+    });
+    body.innerHTML = rows.join('');
+    sub.textContent = `${fechas.length} dÃ­as Â· ${totalRows.toLocaleString('es-CO')} registros`;
+  }
+
+  function buildDayRow(fecha, total, found, isMock) {
+    const missing = total - found;
+    const d = new Date(fecha + 'T00:00:00');
+    const label = d.toLocaleDateString('es-CO', { weekday:'short', day:'2-digit', month:'short' });
+    return `<tr id="row-${fecha}">
+      <td style="font-weight:600;white-space:nowrap">${label}${isMock ? ' <span style="font-size:10px;color:var(--neutral-400)">(mock)</span>' : ''}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums">${total}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums;color:var(--success)">${found}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums;color:var(--danger)">${missing}</td>
+      <td style="text-align:right">
+        <button class="btn btn-ghost btn-sm" id="btn-${fecha}"
+          onclick="toggleDayDetail('${fecha}', this)">
+          Ver detalle â†’
+        </button>
+      </td>
+    </tr>`;
+  }
+
+  // â”€â”€ Level 2: record panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  function toggleDayDetail(fecha, btn) {
+    const container = document.getElementById('detail-panel-container');
+
+    if (selectedFecha === fecha) {
+      // Collapse
+      container.innerHTML = '';
+      btn.textContent = 'Ver detalle â†’';
+      selectedFecha = null;
+      return;
+    }
+
+    // Reset previous button
+    if (selectedFecha) {
+      const prevBtn = document.getElementById('btn-' + selectedFecha);
+      if (prevBtn) prevBtn.textContent = 'Ver detalle â†’';
+    }
+
+    selectedFecha = fecha;
+    btn.textContent = 'Ocultar â†‘';
+
+    const usuario  = getCurrentUser();
+    let registros  = getDatosDelDia(usuario, fecha);
+    const isMock   = registros.length === 0;
+    if (isMock) {
+      // Use mock data shaped like real: [nrodcto, destino, cuota, planilla, id]
+      registros = generateDataset(usuario).map(r => [r.nrodcto, r.destino, r.cuotaMod, r.nroPlanilla, r.id]);
+    }
+
+    const fmtCOP = new Intl.NumberFormat('es-CO', { style:'currency', currency:'COP', minimumFractionDigits:0 });
+    const d      = new Date(fecha + 'T00:00:00');
+    const label  = d.toLocaleDateString('es-CO', { weekday:'long', day:'2-digit', month:'long', year:'numeric' });
+
+    const rows = registros.map(r => {
+      const [nrodcto, destino, cuota, planilla, id] = r;
+      const api     = mockConsultaSoporte(nrodcto);
+      const estadoTag = api.success
+        ? `<span class="tag tag-green">âœ… Entregado</span>`
+        : `<span class="tag tag-red">âŒ Faltante</span>`;
+      const verBtn = api.success
+        ? `<button class="btn btn-ghost btn-sm"
+              onclick='verSoporte(${JSON.stringify({nrodcto, path: api.data[0].storage_path, fecha: api.data[0].fechaRegistro})})'>
+             Ver soporte
+           </button>`
+        : `<span style="color:var(--neutral-300);font-size:12px">â€”</span>`;
+      return `<tr>
+        <td><span class="mono">${esc(nrodcto)}</span></td>
+        <td class="truncate" style="max-width:200px" title="${esc(destino)}">${esc(destino)}</td>
+        <td class="tbl-currency">${fmtCOP.format(cuota || 0)}</td>
+        <td>${esc(planilla)}</td>
+        <td style="text-align:center">${estadoTag}</td>
+        <td style="text-align:right">${verBtn}</td>
+      </tr>`;
+    }).join('');
+
+    // Scroll to row then inject panel below it
+    const targetRow = document.getElementById('row-' + fecha);
+    if (targetRow) {
+      targetRow.scrollIntoView({ behavior:'smooth', block:'nearest' });
+    }
+
+    container.innerHTML = `
+      <div class="day-panel">
+        <div class="day-panel-header">
+          <div>
+            <div class="day-panel-title">ðŸ“‹ ${label}${isMock ? ' <span style="font-weight:400;font-size:12px;color:var(--neutral-400)">(datos de ejemplo)</span>' : ''}</div>
+            <div style="font-size:12px;color:var(--neutral-400);margin-top:3px">${registros.length} registros Â· clic en "Ver soporte" para abrir el documento</div>
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="toggleDayDetail('${fecha}', document.getElementById('btn-${fecha}'))">âœ• Cerrar</button>
+        </div>
+        <div class="day-panel table-wrap">
+          <table>
+            <thead><tr>
+              <th>Nrodcto</th>
+              <th>Destino</th>
+              <th class="tbl-currency">Cuota Mod</th>
+              <th>Nro. Planilla</th>
+              <th style="text-align:center">Estado</th>
+              <th></th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      </div>`;
+  }
+
+  // â”€â”€ "Ver soporte" modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  function verSoporte(info) {
+    const dlUrl = 'https://intranet.helpharma.com/ver-pdf/' + info.path;
+    document.getElementById('modal-title').textContent = 'Soporte: ' + info.nrodcto;
+    document.getElementById('modal-sub').textContent   = 'Registrado: ' + info.fecha;
+    document.getElementById('modal-body').innerHTML = `
+      <div style="font-size:13px;color:var(--neutral-600);margin-bottom:6px">Ruta de almacenamiento:</div>
+      <div class="path-chip">ðŸ“ ${esc(info.path)}</div>
+      <div style="margin-top:16px">
+        <a href="${dlUrl}" target="_blank" rel="noopener"
+           class="btn btn-primary btn-sm" style="text-decoration:none">
+          â¬‡ï¸ Abrir / Descargar PDF
+        </a>
+        <span style="font-size:11px;color:var(--neutral-400);margin-left:10px">Requiere sesiÃ³n en intranet</span>
+      </div>`;
+    document.getElementById('modal-soporte').classList.add('open');
+  }
+
+  // Close modal on backdrop click
+  document.getElementById('modal-soporte').addEventListener('click', function(e) {
+    if (e.target === this) this.classList.remove('open');
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeModal('modal-soporte');
+  });
+</script>
+</body>
+</html>

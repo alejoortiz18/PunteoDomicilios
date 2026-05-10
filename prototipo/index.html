@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard — Punteo de Domicilios · HELPHARMA</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="shared.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <script src="datos-reales.js" onerror="console.warn('datos-reales.js no encontrado — usando datos mock')"></script>
+  <style>
+    .filter-row { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
+    .filter-row .form-group { flex: 1; min-width: 160px; max-width: 280px; }
+    .results-bar {
+      display: none; align-items: center; justify-content: space-between;
+      background: #fff; border: 1px solid var(--neutral-200); border-radius: 10px;
+      padding: 12px 20px; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;
+      box-shadow: var(--shadow-sm);
+    }
+    .results-bar.visible { display: flex; }
+    .charts-row { display: grid; grid-template-columns: 1fr 320px; gap: 16px; margin-bottom: 24px; }
+    .legend-row { display: flex; gap: 16px; margin-top: 10px; }
+    .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--neutral-500); }
+    .legend-dot  { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .tabs { display: flex; gap: 4px; background: var(--neutral-100); padding: 3px; border-radius: 8px; }
+    .tab-btn {
+      height: 28px; padding: 0 12px; border: none; border-radius: 6px;
+      font-size: 12px; font-weight: 600; font-family: inherit; cursor: pointer;
+      background: transparent; color: var(--neutral-500); transition: all var(--transition);
+    }
+    .tab-btn.active { background: var(--primary); color: #fff; box-shadow: var(--shadow-sm); }
+    .tab-btn:hover:not(.active) { background: var(--neutral-200); color: var(--neutral-700); }
+    .coverage-ring { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); width: 54px; height: 54px; }
+    .mono { font-family: 'Courier New', monospace; font-size: 12px; }
+    .tbl-currency { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .change-banner {
+      display: none; align-items: center; gap: 10px;
+      background: var(--warning-light); border: 1px solid var(--warning-soft); border-radius: 8px;
+      padding: 10px 14px; margin-bottom: 16px; font-size: 13px; color: var(--warning); font-weight: 500;
+    }
+    .change-banner.visible { display: flex; }
+    @media (max-width: 1100px) { .charts-row { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<div class="main">
+  <div class="page-body">
+
+    <div class="card card-pad mb-6">
+      <div class="section-label">🔍 Filtros de Consulta</div>
+      <div id="change-banner" class="change-banner">⚠️ Hay cambios sin aplicar — haz clic en <strong style="margin-left:4px">Consultar</strong> para actualizar resultados.</div>
+      <div class="filter-row">
+        <div class="form-group" style="max-width:190px">
+          <label for="sel-fecha">Fecha</label>
+          <input type="date" id="sel-fecha" class="form-control" onchange="onFilterChange()" />
+        </div>
+        <button class="btn btn-primary" id="btn-consultar" onclick="iniciarConsulta()">
+          <span id="btn-icon">🔍</span><span id="btn-text">Consultar</span>
+        </button>
+        <button class="btn btn-ghost" onclick="limpiarFiltros()">✕ Limpiar</button>
+      </div>
+    </div>
+
+    <div class="progress-panel mb-6" id="progress-panel" style="display:none">
+      <div class="progress-header">
+        <div class="progress-label">
+          <div class="spinner" style="border-color:rgba(37,99,235,.3);border-top-color:var(--primary)"></div>
+          Consultando API por cada documento…
+        </div>
+        <span id="progress-count" class="text-sm text-muted">0 / 0</span>
+      </div>
+      <div class="progress-track" style="margin-bottom:8px"><div class="progress-fill" id="progress-bar" style="width:0%"></div></div>
+      <div class="progress-stats">
+        <div class="progress-stat">✅ <span id="prog-found">0</span> encontrados</div>
+        <div class="progress-stat">❌ <span id="prog-missing">0</span> faltantes</div>
+        <div class="progress-stat">⏳ <span id="prog-pending">0</span> pendientes</div>
+      </div>
+    </div>
+
+    <div class="results-bar" id="results-bar">
+      <div style="display:flex;align-items:center;gap:8px;font-size:14px;color:var(--neutral-700)">
+        Resultados para: <strong id="ctx-mensajero"></strong>&nbsp;·&nbsp;<strong id="ctx-fecha"></strong>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <span class="tag tag-blue" id="ctx-total"></span>
+        <span class="tag tag-green" id="ctx-found"></span>
+        <span class="tag tag-red" id="ctx-missing"></span>
+      </div>
+    </div>
+
+    <div class="kpi-grid" id="kpi-grid" style="display:none">
+      <div class="kpi-card kpi-blue">
+        <div class="kpi-icon">📦</div><div class="kpi-value" id="kv-total">—</div>
+        <div class="kpi-label">Total Registros</div><div class="kpi-sub" id="ks-total"></div>
+      </div>
+      <div class="kpi-card kpi-green">
+        <div class="kpi-icon">�</div><div class="kpi-value" id="kv-found" style="font-size:20px">—</div>
+        <div class="kpi-label">Total Cuota Mod</div><div class="kpi-sub" id="ks-found"></div>
+      </div>
+      <div class="kpi-card kpi-red">
+        <div class="kpi-icon">🗂️</div><div class="kpi-value" id="kv-missing" style="font-size:20px">—</div>
+        <div class="kpi-label">Planillas Distintas</div><div class="kpi-sub" id="ks-missing"></div>
+      </div>
+      <div class="kpi-card kpi-orange" style="position:relative">
+        <div class="kpi-icon">✅</div><div class="kpi-value" id="kv-coverage">—</div>
+        <div class="kpi-label">Con Soporte</div>
+        <canvas class="coverage-ring" id="donut-mini" width="54" height="54"></canvas>
+      </div>
+    </div>
+
+    <div class="charts-row" id="charts-row" style="display:none">
+      <div class="card card-pad">
+        <div class="flex items-center justify-between mb-4">
+          <div><div class="card-title">📅 Línea de tiempo — Últimos 7 días</div><div class="card-sub">Encontrados vs. Faltantes por fecha · clic en barra para filtrar</div></div>
+          <div class="tabs">
+            <button class="tab-btn active" id="tab-bar"  onclick="setChartType('bar')">Barras</button>
+            <button class="tab-btn"        id="tab-line" onclick="setChartType('line')">Línea</button>
+          </div>
+        </div>
+        <canvas id="timeline-chart" height="95"></canvas>
+        <div class="legend-row">
+          <div class="legend-item"><span class="legend-dot" style="background:#16a34a"></span>Con soporte</div>
+          <div class="legend-item"><span class="legend-dot" style="background:#dc2626"></span>Sin soporte</div>
+        </div>
+      </div>
+      <div class="card card-pad">
+        <div class="card-title mb-4">📊 Con / Sin Soporte</div>
+        <canvas id="doughnut-chart" height="210"></canvas>
+        <div id="donut-detail" class="mt-2 text-sm text-muted text-right"></div>
+      </div>
+    </div>
+
+    <div class="card mb-6" id="resumen-card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">📅 Resumen Mensual</div>
+          <div class="card-sub" id="resumen-sub">Cargando...</div>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Mes / Año</th>
+            <th style="text-align:right">Total Registros</th>
+            <th style="text-align:right">Planillas</th>
+            <th></th>
+          </tr></thead>
+          <tbody id="resumen-body">
+            <tr><td colspan="4" style="text-align:center;color:var(--neutral-400);padding:32px">Cargando datos...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="empty-state" id="empty-state">
+      <div class="empty-icon">📋</div>
+      <h3>Sin resultados todavía</h3>
+      <p id="empty-msg">Selecciona una fecha y haz clic en <strong>Consultar</strong>.</p>
+    </div>
+  </div>
+</div>
+<div class="toast-container" id="toast-container"></div>
+<script src="shared.js"></script>
+<script>
+  buildSidebar('dashboard');
+  buildTopbar('Punteo de Domicilios', 'Dashboard');
+
+  let timelineChart = null, doughnutChart = null, chartType = 'bar';
+  let hasResults = false;
+  const fmtCOP = new Intl.NumberFormat('es-CO', { style:'currency', currency:'COP', minimumFractionDigits:0 });
+
+  // ── Monthly summary ─────────────────────────────────────────
+  function renderResumenMensual(usuario) {
+    const resumen = getResumenMensual(usuario);
+    const body    = document.getElementById('resumen-body');
+    const sub     = document.getElementById('resumen-sub');
+    if (!resumen.length) {
+      body.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--neutral-400);padding:32px">Sin datos disponibles para este usuario.</td></tr>';
+      sub.textContent = 'Sin registros';
+      return;
+    }
+    const totalReg = resumen.reduce((s, r) => s + r.totalReg, 0);
+    sub.textContent = `${resumen.length} meses · ${totalReg.toLocaleString('es-CO')} registros totales`;
+    body.innerHTML = resumen.map(r => `
+      <tr>
+        <td style="font-weight:600">${r.label}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums">${r.totalReg.toLocaleString('es-CO')}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums">${r.planillas}</td>
+        <td style="text-align:right">
+          <button class="btn btn-ghost btn-sm" onclick="location.href='detalle.html?mes=${r.mes}'">
+            Ver detalle →
+          </button>
+        </td>
+      </tr>`).join('');
+  }
+
+  // ── Filters ─────────────────────────────────────────────────
+  function onFilterChange() {
+    if (hasResults) document.getElementById('change-banner').classList.add('visible');
+  }
+
+  function limpiarFiltros() {
+    document.getElementById('sel-fecha').value = formatDateInput(new Date());
+    document.getElementById('change-banner').classList.remove('visible');
+    hideResults();
+  }
+
+  function hideResults() {
+    hasResults = false;
+    document.getElementById('kpi-grid').style.display = 'none';
+    document.getElementById('charts-row').style.display = 'none';
+    document.getElementById('results-bar').classList.remove('visible');
+    document.getElementById('empty-state').style.display = 'block';
+  }
+
+  async function iniciarConsulta() {
+    const usuario = getCurrentUser();
+    const fecha   = document.getElementById('sel-fecha').value;
+    if (!usuario) { window.location.replace('login.html'); return; }
+    if (!fecha)   { showToast('Selecciona una fecha.', 'error'); return; }
+    hideResults();
+    document.getElementById('change-banner').classList.remove('visible');
+    document.getElementById('empty-state').style.display = 'none';
+    const btn = document.getElementById('btn-consultar');
+    document.getElementById('btn-icon').innerHTML = '<div class="spinner"></div>';
+    document.getElementById('btn-text').textContent = 'Consultando BD\u2026';
+    btn.disabled = true;
+    await sleep(400);
+
+    // Use real data if available, otherwise fall back to mock
+    let dayData = getDatosDelDia(usuario, fecha);
+    const isReal = dayData.length > 0;
+    if (!isReal) {
+      dayData = generateDataset(usuario).map(r => [r.nrodcto, r.destino, r.cuotaMod, r.nroPlanilla, r.id]);
+    }
+
+    const panel = document.getElementById('progress-panel');
+    panel.style.display = 'block';
+    document.getElementById('btn-text').textContent = 'Procesando API\u2026';
+    const n = dayData.length;
+    let found = 0, missing = 0;
+    for (let i = 0; i <= n; i++) {
+      document.getElementById('progress-bar').style.width = (i / n * 100) + '%';
+      document.getElementById('progress-count').textContent = `${i} / ${n}`;
+      if (i > 0) {
+        const res = mockConsultaSoporte(dayData[i-1][0]);
+        if (res.success) found++; else missing++;
+      }
+      document.getElementById('prog-found').textContent   = found;
+      document.getElementById('prog-missing').textContent = missing;
+      document.getElementById('prog-pending').textContent = Math.max(0, n - i);
+      await sleep(isReal ? 15 : (45 + Math.random() * 30));
+    }
+    panel.style.display = 'none';
+    document.getElementById('btn-icon').textContent = '\ud83d\udd0d';
+    document.getElementById('btn-text').textContent = 'Consultar';
+    btn.disabled = false;
+    renderResults(usuario, fecha, dayData, found, missing);
+  }
+
+  function renderResults(usuario, fecha, data, foundCnt, missingCnt) {
+    hasResults = true;
+    const total      = data.length;
+    const fObj       = new Date(fecha + 'T00:00:00');
+    const totalCuota = data.reduce((s, r) => s + (r[2]||0), 0);
+    const planillas  = new Set(data.map(r => r[3])).size;
+
+    document.getElementById('ctx-mensajero').textContent = usuario;
+    document.getElementById('ctx-fecha').textContent     = formatDate(fObj);
+    document.getElementById('ctx-total').textContent     = `\ud83d\udce6 ${total} registros`;
+    document.getElementById('ctx-found').textContent     = `\u2705 ${foundCnt} con soporte`;
+    document.getElementById('ctx-missing').textContent   = `\u274c ${missingCnt} sin soporte`;
+    document.getElementById('results-bar').classList.add('visible');
+
+    document.getElementById('kpi-grid').style.display = 'grid';
+    animateCounter(document.getElementById('kv-total'),    total,    '');
+    document.getElementById('kv-found').textContent   = fmtCOP.format(totalCuota);
+    document.getElementById('kv-missing').textContent = planillas;
+    animateCounter(document.getElementById('kv-coverage'), foundCnt, '');
+    document.getElementById('ks-total').textContent   = formatDate(fObj);
+    document.getElementById('ks-found').textContent   = 'Suma cuotas del d\u00eda';
+    document.getElementById('ks-missing').textContent = 'Planillas distintas';
+    drawMiniDonut(foundCnt, missingCnt);
+
+    document.getElementById('charts-row').style.display = 'grid';
+    renderTimeline(usuario);
+    renderDoughnut(foundCnt, missingCnt);
+    document.getElementById('donut-detail').textContent = `${foundCnt} con soporte \u00b7 ${missingCnt} sin soporte`;
+
+    showToast(`${total} registros cargados para ${usuario}.`, 'success');
+  }
+
+  function drawMiniDonut(f, m) {
+    const cv = document.getElementById('donut-mini');
+    const ctx = cv.getContext('2d');
+    const r = (f + m) ? f / (f + m) : 0;
+    ctx.clearRect(0, 0, 54, 54);
+    ctx.beginPath(); ctx.arc(27,27,22,0,Math.PI*2); ctx.strokeStyle='#fca5a5'; ctx.lineWidth=6; ctx.stroke();
+    if (r > 0) { ctx.beginPath(); ctx.arc(27,27,22,-Math.PI/2,-Math.PI/2+Math.PI*2*r); ctx.strokeStyle='#16a34a'; ctx.lineWidth=6; ctx.lineCap='round'; ctx.stroke(); }
+  }
+
+  function setChartType(type) {
+    chartType = type;
+    ['bar','line'].forEach(t => document.getElementById('tab-'+t).classList.toggle('active', t===type));
+    renderTimeline(getCurrentUser());
+  }
+
+  function renderTimeline(usuario) {
+    const tl = generateTimeline(usuario, 7);
+    if (timelineChart) timelineChart.destroy();
+    const ctx = document.getElementById('timeline-chart').getContext('2d');
+    timelineChart = new Chart(ctx, {
+      type: chartType,
+      data: {
+        labels: tl.map(d => d.fecha),
+        datasets: [
+          { label:'Con soporte', data:tl.map(d=>d.found), backgroundColor:'rgba(22,163,74,.75)', borderColor:'#16a34a', borderWidth:2, borderRadius:chartType==='bar'?4:0, tension:0.4 },
+          { label:'Sin soporte', data:tl.map(d=>d.missing), backgroundColor:'rgba(220,38,38,.6)', borderColor:'#dc2626', borderWidth:2, borderRadius:chartType==='bar'?4:0, tension:0.4 },
+        ],
+      },
+      options: {
+        responsive:true, interaction:{mode:'index',intersect:false},
+        plugins: {
+          legend:{display:false},
+          tooltip:{
+            backgroundColor:'#1e293b', titleFont:{size:12,weight:'600'}, bodyFont:{size:12}, padding:12,
+            callbacks:{
+              title:([i])=>`\ud83d\udcc5 ${i.label}`,
+              afterBody:(items)=>{
+                const t=items.reduce((s,i)=>s+i.raw,0);
+                return [`\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500`,`Total: ${t}`,`\ud83d\udcca Cobertura: ${t?(items[0].raw/t*100).toFixed(1):0}%`];
+              }
+            }
+          },
+        },
+        scales:{
+          x:{stacked:chartType==='bar',grid:{display:false},ticks:{font:{size:11}}},
+          y:{stacked:chartType==='bar',beginAtZero:true,grid:{color:'rgba(0,0,0,.05)'},ticks:{font:{size:11}}},
+        },
+        onClick:(_,els)=>{ if(els.length) showToast(`D\u00eda seleccionado: ${timelineChart.data.labels[els[0].index]}`,'info'); },
+      },
+    });
+  }
+
+  function renderDoughnut(f, m) {
+    if (doughnutChart) doughnutChart.destroy();
+    const ctx = document.getElementById('doughnut-chart').getContext('2d');
+    doughnutChart = new Chart(ctx, {
+      type:'doughnut',
+      data:{ labels:['Con soporte','Sin soporte'], datasets:[{data:[f,m],backgroundColor:['#16a34a','#dc2626'],hoverOffset:6,borderWidth:2,borderColor:'#fff'}] },
+      options:{ responsive:true, cutout:'68%', plugins:{ legend:{position:'bottom',labels:{font:{size:12},padding:14}}, tooltip:{backgroundColor:'#1e293b',callbacks:{label:c=>{const t=c.dataset.data.reduce((a,b)=>a+b,0);return ` ${c.label}: ${c.raw} (${t?(c.raw/t*100).toFixed(1):0}%)`;}}} } },
+    });
+  }
+
+  // ── Bootstrap ───────────────────────────────────────────────
+  requireUser(function(usuario) {
+    document.getElementById('sel-fecha').value = formatDateInput(new Date());
+    const b = getBodega(usuario);
+    document.getElementById('empty-msg').innerHTML =
+      `Usuario activo: <strong style="color:${b.color}">${usuario}</strong> \u00b7 ` +
+      `Selecciona una fecha y haz clic en <strong>Consultar</strong>.`;
+    renderResumenMensual(usuario);
+    setTimeout(() => iniciarConsulta(), 400);
+  });
+</script>
+</body>
+</html>
