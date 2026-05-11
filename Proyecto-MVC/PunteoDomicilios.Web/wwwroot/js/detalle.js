@@ -7,10 +7,11 @@ const fmtFecha = (iso) => {
     return `${d}/${m}/${y}`;
 };
 
-let diaActivo    = null;
-let modalSoporte = null;
-let pagDias      = null;
-let pagPanel     = null;
+let diaActivo         = null;
+let modalSoporte      = null;
+let pagDias           = null;
+let pagPanel          = null;
+let consultaController = null;  // AbortController de la consulta activa
 
 // ── Al cargar ─────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
@@ -66,6 +67,15 @@ function mostrarVacioDias(msg) {
 // ── Nivel 2: Registros del día ─────────────────────────────────
 async function verDia(fecha) {
     if (diaActivo === fecha) { cerrarPanel(); return; }
+
+    // Cancelar consulta anterior si sigue en vuelo
+    if (consultaController) {
+        consultaController.abort();
+    }
+    const controller = new AbortController();
+    consultaController = controller;
+    const signal = controller.signal;
+
     diaActivo = fecha;
 
     const panel   = document.getElementById('panelDia');
@@ -85,7 +95,7 @@ async function verDia(fecha) {
     setTimeout(() => panel.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
 
     try {
-        const res = await fetch(`/api/detalle/registros?fecha=${encodeURIComponent(fecha)}`);
+        const res = await fetch(`/api/detalle/registros?fecha=${encodeURIComponent(fecha)}`, { signal });
         loading.classList.add('d-none');
 
         if (!res.ok) { mostrarModal('Error', 'Error al cargar los registros.', 'error'); return; }
@@ -131,9 +141,11 @@ async function verDia(fecha) {
         // Consultar soporte en paralelo; actualizar paginador reactivamente
         let done = 0;
         await Promise.all(nrodctos.map(async (nrodcto, i) => {
-            let estadoHtml, accionHtml;
+            let estadoHtml = '<span class="tag tag-yellow">⚠ Error API</span>';
+            let accionHtml = '—';
+
             try {
-                const sr      = await fetch(`/api/detalle/soporte?nrodcto=${encodeURIComponent(nrodcto)}`);
+                const sr      = await fetch(`/api/detalle/soporte?nrodcto=${encodeURIComponent(nrodcto)}`, { signal });
                 const soporte = sr.ok ? await sr.json() : null;
 
                 if (!soporte) {
@@ -146,34 +158,38 @@ async function verDia(fecha) {
                     estadoHtml = '<span class="tag tag-green">✅ Encontrado</span>';
                     const itm   = soporte.data[0];
                     const path  = itm.storage_Path  ?? '';
-                    const fecha = itm.fechaRegistro ?? '';
+                    const fReg  = itm.fechaRegistro ?? '';
                     accionHtml  = path
                         ? `<button class="btn btn-sm btn-outline-success"
-                                  onclick="verSoporte(${JSON.stringify(nrodcto)}, ${JSON.stringify(fecha)}, ${JSON.stringify(path)})">
+                                  onclick='verSoporte(${JSON.stringify(nrodcto)}, ${JSON.stringify(fReg)}, ${JSON.stringify(path)})'>
                                🔍 Ver soporte
                            </button>`
                         : '<span class="text-muted small">Sin archivo</span>';
                 }
-            } catch {
-                estadoHtml = '<span class="tag tag-yellow">⚠ Error API</span>';
-                accionHtml = '—';
-            } finally {
-                // Actualizar datos y re-renderizar si la fila está en la página activa
-                const updated = { ...rowItems[i], estadoHtml, accionHtml };
-                rowItems[i]   = updated;
-                pagPanel.updateItem(i, updated);
+            } catch (e) {
+                if (e.name === 'AbortError') return; // consulta cancelada — no actualizar UI
+                // error de red u otro: dejar estado de error por defecto
+            }
 
-                done++;
-                const pct = Math.round((done / nrodctos.length) * 100);
-                progFill.style.width = pct + '%';
-                progCnt.textContent  = `${done} / ${nrodctos.length}`;
-                if (done === nrodctos.length) {
-                    setTimeout(() => progBar.classList.add('d-none'), 800);
-                }
+            // Si se inició una nueva consulta mientras esta corría, no tocar la UI
+            if (signal.aborted) return;
+
+            const updated = { ...rowItems[i], estadoHtml, accionHtml };
+            rowItems[i]   = updated;
+            pagPanel.updateItem(i, updated);
+
+            done++;
+            const pct = Math.round((done / nrodctos.length) * 100);
+            progFill.style.width = pct + '%';
+            progCnt.textContent  = `${done} / ${nrodctos.length}`;
+            if (done === nrodctos.length) {
+                setTimeout(() => progBar.classList.add('d-none'), 800);
+                consultaController = null;
             }
         }));
 
     } catch (e) {
+        if (e.name === 'AbortError') return; // nueva consulta iniciada — ignorar silenciosamente
         console.error(e);
         loading.classList.add('d-none');
         mostrarModal('Error inesperado', 'Error inesperado al consultar los registros.', 'error');
@@ -181,6 +197,10 @@ async function verDia(fecha) {
 }
 
 function cerrarPanel() {
+    if (consultaController) {
+        consultaController.abort();
+        consultaController = null;
+    }
     diaActivo = null;
     document.getElementById('panelDia').classList.add('d-none');
 }

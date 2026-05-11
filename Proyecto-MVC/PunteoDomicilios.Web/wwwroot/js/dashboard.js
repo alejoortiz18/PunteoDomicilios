@@ -5,7 +5,6 @@ const fmtCOP = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'CO
 const fmtNum = new Intl.NumberFormat('es-CO');
 
 let chartTimeline = null;
-let chartDonut    = null;
 let pagResumen    = null;
 
 // ── Al cargar la página ────────────────────────────────────────
@@ -58,81 +57,31 @@ async function iniciarConsulta() {
     resetKpis();
     ocultarCharts();
 
-    const progreso  = document.getElementById('areaProgreso');
-    const progFill  = document.getElementById('progFill');
-    const progCont  = document.getElementById('progContador');
-    const progEntr  = document.getElementById('progEntregados');
-    const progFalt  = document.getElementById('progFaltantes');
-
-    progFill.style.width = '0%';
-    progCont.textContent = '0 / 0';
-    progEntr.textContent = '✅ 0 entregados';
-    progFalt.textContent = '❌ 0 faltantes';
-    progreso.classList.remove('d-none');
-
     try {
-        // 1. Obtener registros del día
+        // Obtener registros del día
         const res = await fetch(`/api/registros?fecha=${encodeURIComponent(fecha)}`);
         if (!res.ok) { const e = await res.json().catch(()=>({})); mostrarModal('Error del servidor', e.error ?? 'Error del servidor.', 'error'); return; }
 
         const data = await res.json();
         const registros = data.registros ?? [];
-        const nrodctos  = data.nrodctos  ?? [];
 
         if (registros.length === 0) {
-            progreso.classList.add('d-none');
             mostrarModal('Sin resultados', 'No hay registros para esta fecha.', 'info');
             return;
         }
 
-        // KPIs inmediatos (sin soporte aún)
-        const totalCuota    = registros.reduce((s, r) => s + (r.cuotaMod || 0), 0);
-        const planillasSet  = new Set(registros.map(r => r.nroPlanilla).filter(Boolean));
-        actualizarKpi('kpiTotal',    registros.length, '');
-        actualizarKpi('kpiCuota',    totalCuota, '', true);
+        // KPIs
+        const totalCuota     = registros.reduce((s, r) => s + (r.cuotaMod || 0), 0);
+        const planillasSet   = new Set(registros.map(r => r.nroPlanilla).filter(Boolean));
+        const mensajerosSet  = new Set(registros.map(r => r.mensajero).filter(Boolean));
+        actualizarKpi('kpiTotal',     registros.length, '');
+        actualizarKpi('kpiCuota',     totalCuota, '', true);
         actualizarKpi('kpiPlanillas', planillasSet.size, '');
+        actualizarKpi('kpiSoporte',   mensajerosSet.size, '');
         document.getElementById('areaKpi').classList.remove('d-none');
 
-        // 2. Batch API de soportes
-        progCont.textContent = `0 / ${nrodctos.length}`;
-        const batchRes = await fetch('/api/consultar-batch', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(nrodctos)
-        });
-
-        if (!batchRes.ok) {
-            progreso.classList.add('d-none');
-            return;
-        }
-
-        const estados = await batchRes.json();
-
-        // Animar progreso
-        let entregados = 0, faltantes = 0;
-        estados.forEach((e, i) => {
-            if (e.estado === 1 /* Encontrado */) entregados++;
-            else faltantes++;
-
-            const pct = Math.round(((i + 1) / estados.length) * 100);
-            progFill.style.width = pct + '%';
-            progCont.textContent = `${i + 1} / ${estados.length}`;
-            progEntr.textContent = `✅ ${entregados} entregados`;
-            progFalt.textContent = `❌ ${faltantes} faltantes`;
-        });
-
-        // KPI soporte
-        const pctSoporte = estados.length > 0
-            ? Math.round((entregados / estados.length) * 100)
-            : 0;
-        actualizarKpi('kpiSoporte', pctSoporte, '%');
-
-        // Ocultar progreso
-        setTimeout(() => progreso.classList.add('d-none'), 800);
-
-        // Charts
+        // Timeline
         await cargarTimeline();
-        renderDonut(entregados, faltantes);
         document.getElementById('areaCharts').classList.remove('d-none');
 
     } catch (e) {
@@ -229,33 +178,6 @@ async function cargarTimeline() {
     } catch (e) {
         console.warn('No se pudo cargar el timeline:', e);
     }
-}
-
-// ── Donut Chart ─────────────────────────────────────────────────
-function renderDonut(entregados, faltantes) {
-    const ctx = document.getElementById('chartDonut').getContext('2d');
-    if (chartDonut) chartDonut.destroy();
-
-    chartDonut = new Chart(ctx, {
-        type: 'doughnut',
-        data: {
-            labels: ['Con soporte', 'Sin soporte'],
-            datasets: [{
-                data: [entregados, faltantes],
-                backgroundColor: ['#16a34a', '#dc2626'],
-                borderWidth: 2,
-                borderColor: '#fff'
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                legend: { position: 'bottom' }
-            },
-            cutout: '65%'
-        }
-    });
 }
 
 // ── Helpers ──────────────────────────────────────────────────────

@@ -61,11 +61,9 @@ try
         options.AttemptTimeout.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
     });
 
-    // ── HttpClient Descarga (Basic Auth) ──────────────────────────────────────
+    // ── HttpClient Descarga (login Laravel + S3 redirect) ────────────────────
     var descargaConfig = builder.Configuration.GetSection("DescargaInterna");
     var descargaBaseUrl = descargaConfig["BaseUrl"] ?? apiBaseUrl;
-    var descargaUsuario = descargaConfig["Usuario"] ?? string.Empty;
-    var descargaPassword = descargaConfig["Password"] ?? string.Empty;
 
     builder.Services.AddHttpClient<IDescargaService, DescargaService>(client =>
     {
@@ -73,9 +71,10 @@ try
     })
     .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
     {
-        Credentials = string.IsNullOrWhiteSpace(descargaUsuario)
-            ? CredentialCache.DefaultCredentials
-            : new NetworkCredential(descargaUsuario, descargaPassword)
+        // AllowAutoRedirect = false es esencial: /ver-pdf/ hace 302 a S3,
+        // necesitamos capturar el Location header para seguirlo explícitamente.
+        AllowAutoRedirect = false,
+        UseCookies = false,  // Cookies manejadas manualmente en DescargaService
     });
 
     // ── Build ─────────────────────────────────────────────────────────────────
