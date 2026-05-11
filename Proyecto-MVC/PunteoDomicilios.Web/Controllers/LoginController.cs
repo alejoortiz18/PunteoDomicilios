@@ -21,7 +21,7 @@ public class LoginController : Controller
     }
 
     [HttpGet("")]
-    public async Task<IActionResult> Index([FromQuery] bool cambiar = false)
+    public IActionResult Index([FromQuery] bool cambiar = false)
     {
         if (cambiar)
             HttpContext.Session.Remove(SessionKeys.Usuario);
@@ -30,22 +30,31 @@ public class LoginController : Controller
         if (!cambiar && HttpContext.Session.GetString(SessionKeys.Usuario) is { Length: > 0 })
             return RedirectToAction("Index", "Dashboard");
 
-        var usuarios = (await _mensajeroService.ObtenerUsuariosAsync()).ToList();
-        return View(usuarios);
+        return View();
     }
 
     [HttpPost("")]
     [ValidateAntiForgeryToken]
-    public IActionResult Entrar([FromForm] string usuario)
+    public async Task<IActionResult> Entrar([FromForm] string usuario)
     {
         if (string.IsNullOrWhiteSpace(usuario))
         {
-            TempData["Error"] = "Selecciona un usuario antes de continuar.";
+            TempData["Error"] = "Ingresa tu nombre de usuario antes de continuar.";
             return RedirectToAction(nameof(Index));
         }
 
-        HttpContext.Session.SetString(SessionKeys.Usuario, usuario.Trim());
-        _logger.LogInformation("Usuario {Usuario} inició sesión", usuario);
+        var usuarioNorm = usuario.Trim().ToUpperInvariant();
+
+        // Validar que el usuario exista en la base de datos
+        var usuarios = await _mensajeroService.ObtenerUsuariosAsync();
+        if (!usuarios.Any(u => u.Equals(usuarioNorm, StringComparison.OrdinalIgnoreCase)))
+        {
+            TempData["Error"] = $"El usuario '{usuarioNorm}' no existe en el sistema.";
+            return RedirectToAction(nameof(Index));
+        }
+
+        HttpContext.Session.SetString(SessionKeys.Usuario, usuarioNorm);
+        _logger.LogInformation("Usuario {Usuario} inició sesión", usuarioNorm);
         return RedirectToAction("Index", "Dashboard");
     }
 }

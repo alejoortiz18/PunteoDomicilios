@@ -38,7 +38,7 @@ async function mockRegistrosConDelay(page: Page, delayMs = 3_000): Promise<void>
 
 async function loginComoMMUNOZ(page: Page): Promise<void> {
   await page.goto('/login');
-  await page.selectOption('select[name="usuario"]', 'MMUNOZ');
+  await page.fill('input[name="usuario"]', 'MMUNOZ');
   await page.click('button[type="submit"]');
   // Usar patrón glob para aceptar tanto http como https (el middleware HTTPS redirect
   // puede redirigir a https://localhost:7261/ dependiendo del perfil de la app)

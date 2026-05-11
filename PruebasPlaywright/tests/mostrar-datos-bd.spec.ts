@@ -15,7 +15,7 @@ import { test, expect, Page } from '@playwright/test';
 /** Realiza el login con MMUNOZ y espera a llegar al dashboard. */
 async function loginComoMMUNOZ(page: Page): Promise<void> {
   await page.goto('/login');
-  await page.selectOption('select[name="usuario"]', 'MMUNOZ');
+  await page.fill('input[name="usuario"]', 'MMUNOZ');
   await page.click('button[type="submit"]');
   await page.waitForURL('http://localhost:5125/');
 }

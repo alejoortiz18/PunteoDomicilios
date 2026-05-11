@@ -1,4 +1,3 @@
-@model List<string>
 @{
     ViewData["Title"] = "Iniciar sesión";
     Layout = null; // Login page has no sidebar
@@ -14,23 +13,25 @@
     <link rel="stylesheet" href="~/css/punteo.css" />
 </head>
 <body class="login-page">
-    @if (loginError != null)
-    {
-        <div class="modal fade" id="modalLoginError" tabindex="-1" aria-hidden="true">
-            <div class="modal-dialog modal-dialog-centered modal-sm">
-                <div class="modal-content">
-                    <div class="modal-header bg-danger text-white">
-                        <h5 class="modal-title">Error al iniciar sesión</h5>
-                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">@loginError</div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
-                    </div>
+
+    <!-- Modal de error -->
+    <div class="modal fade" id="modalLoginError" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-sm">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title">❌ Usuario no encontrado</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="modalLoginErrorMsg">
+                    @(loginError ?? "")
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
                 </div>
             </div>
         </div>
-    }
+    </div>
+
     <div class="login-card">
         <div class="login-brand">
             <div class="login-icon">💊</div>
@@ -41,21 +42,24 @@
         <form method="post" action="/login">
             @Html.AntiForgeryToken()
             <div class="mb-3">
-                <label class="form-label fw-semibold">👤 Selecciona tu usuario</label>
-                <select name="usuario" class="form-select" required>
-                    <option value="">— Selecciona —</option>
-                    @foreach (var u in Model)
-                    {
-                        <option value="@u">@u</option>
-                    }
-                </select>
-                <div class="form-text">Estos usuarios provienen de la base de datos HELPHARMA.</div>
+                <label class="form-label fw-semibold">👤 Nombre de usuario</label>
+                <input type="text"
+                       name="usuario"
+                       id="inputUsuario"
+                       class="form-control @(loginError != null ? "is-invalid" : "")"
+                       autocomplete="username"
+                       autocapitalize="characters"
+                       spellcheck="false"
+                       required
+                       autofocus />
+                <div class="form-text">Ingresa el nombre de usuario asignado para la creación de la planilla de domicilios.</div>
             </div>
             <button type="submit" class="btn btn-primary w-100">
                 Entrar al sistema →
             </button>
         </form>
     </div>
+
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     @if (loginError != null)
     {

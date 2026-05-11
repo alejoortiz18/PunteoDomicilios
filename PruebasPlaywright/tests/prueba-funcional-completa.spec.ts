@@ -77,7 +77,7 @@ const MOCK_SOPORTE_NO  = JSON.stringify({ success: false, message: 'No encontrad
 /** Login completo: selecciona usuario, envía el form y espera el dashboard */
 async function loginAs(page: Page, usuario: string = USUARIO): Promise<void> {
   await page.goto('/login');
-  await page.selectOption('select[name="usuario"]', usuario);
+  await page.fill('input[name="usuario"]', usuario);
   await page.click('button[type="submit"]');
   await page.waitForURL(/localhost.*\/$/, { timeout: 15_000 });
   await expect(page.locator('#resumenLoading')).toBeHidden({ timeout: 25_000 });
@@ -132,13 +132,13 @@ test.describe('L — Login', () => {
     await expect(page.locator('.login-icon')).toHaveText('💊');
   });
 
-  test('L-02 el select contiene usuarios cargados desde la BD', async ({ page }) => {
+  test('L-02 el input de usuario es un campo de texto libre', async ({ page }) => {
     await page.goto('/login');
-    const opciones = await page.locator('select[name="usuario"] option').allTextContents();
-    expect(opciones.length, 'Debe haber al menos la opción vacía + un usuario').toBeGreaterThanOrEqual(2);
-    expect(opciones[0]).toContain('Selecciona');
-    // Alguna opción contiene el usuario conocido
-    expect(opciones.some(o => o.trim() === USUARIO)).toBe(true);
+    const input = page.locator('input[name="usuario"]');
+    await expect(input).toBeVisible();
+    await expect(input).toHaveAttribute('type', 'text');
+    // No debe existir ningún <select> con la lista de usuarios
+    await expect(page.locator('select[name="usuario"]')).toHaveCount(0);
   });
 
   test('L-03 enviar sin seleccionar usuario no navega (HTML required)', async ({ page }) => {
@@ -149,12 +149,21 @@ test.describe('L — Login', () => {
     expect(page.url()).toBe(urlAntes);
   });
 
-  test('L-04 seleccionar usuario y hacer submit redirige al Dashboard', async ({ page }) => {
+  test('L-04 ingresar usuario válido y hacer submit redirige al Dashboard', async ({ page }) => {
     await page.goto('/login');
-    await page.selectOption('select[name="usuario"]', USUARIO);
+    await page.fill('input[name="usuario"]', USUARIO);
     await page.click('button[type="submit"]');
     await page.waitForURL(/localhost.*\/$/, { timeout: 15_000 });
     await expect(page).toHaveTitle(/Dashboard/);
+  });
+
+  test('L-04b usuario inexistente muestra modal de error', async ({ page }) => {
+    await page.goto('/login');
+    await page.fill('input[name="usuario"]', 'USUARIO_FALSO_XYZ');
+    await page.click('button[type="submit"]');
+    await expect(page.locator('#modalLoginError')).toBeVisible({ timeout: 8_000 });
+    const msg = await page.locator('#modalLoginErrorMsg').innerText();
+    expect(msg).toContain('USUARIO_FALSO_XYZ');
   });
 
   test('L-05 después del login el sidebar muestra usuario y tres ítems de navegación', async ({ page }) => {

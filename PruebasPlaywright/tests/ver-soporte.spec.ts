@@ -60,7 +60,7 @@ const MOCK_SOPORTE = JSON.stringify({
 // ── Helpers ───────────────────────────────────────────────────────────────────
 async function loginComoMMUNOZ(page: Page): Promise<void> {
   await page.goto('/login');
-  await page.selectOption('select[name="usuario"]', 'MMUNOZ');
+  await page.fill('input[name="usuario"]', 'MMUNOZ');
   await page.click('button[type="submit"]');
   await page.waitForURL(/localhost.*\/$/);
   await expect(page.locator('#resumenLoading')).toBeHidden({ timeout: 20_000 });
