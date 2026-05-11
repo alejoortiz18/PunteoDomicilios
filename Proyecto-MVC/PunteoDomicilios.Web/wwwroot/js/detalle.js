@@ -7,11 +7,15 @@ const fmtFecha = (iso) => {
     return `${d}/${m}/${y}`;
 };
 
-let diaActivo         = null;
-let modalSoporte      = null;
-let pagDias           = null;
-let pagPanel          = null;
+let diaActivo          = null;
+let modalSoporte       = null;
+let pagDias            = null;
+let pagPanel           = null;
 let consultaController = null;  // AbortController de la consulta activa
+let soportesPaths      = [];    // paths encontrados en el último batch
+let faltantesNrodctos  = [];    // nrodctos sin soporte en el último batch
+let todosRowItems      = [];    // todos los items del batch activo
+let modoFiltroFaltantes = false;
 
 // ── Al cargar ─────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
@@ -92,6 +96,14 @@ async function verDia(fecha) {
     progBar.classList.add('d-none');
     panel.classList.remove('d-none');
 
+    // Resetear KPI y ZIP de consultas anteriores
+    soportesPaths       = [];
+    faltantesNrodctos   = [];
+    todosRowItems       = [];
+    modoFiltroFaltantes = false;
+    document.getElementById('panelKpi').classList.add('d-none');
+    document.getElementById('zipProgreso').classList.add('d-none');
+
     setTimeout(() => panel.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
 
     try {
@@ -119,15 +131,7 @@ async function verDia(fecha) {
             accionHtml:  '—'
         }));
 
-        const renderFila = r => `
-            <tr>
-                <td><code>${esc(r.nrodcto)}</code></td>
-                <td>${esc(r.destino)}</td>
-                <td class="text-end">${fmtCOP.format(r.cuotaMod)}</td>
-                <td>${esc(r.nroPlanilla)}</td>
-                <td>${r.estadoHtml}</td>
-                <td>${r.accionHtml}</td>
-            </tr>`;
+        const renderFila = renderFilaRegistro;
 
         if (!pagPanel) pagPanel = new Paginador('panelTbody', 'pagPanel');
         pagPanel.setData(rowItems, renderFila);
@@ -154,11 +158,13 @@ async function verDia(fecha) {
                 } else if (!soporte.success || !soporte.data || soporte.data.length === 0) {
                     estadoHtml = '<span class="tag tag-red">❌ Sin soporte</span>';
                     accionHtml = '—';
+                    faltantesNrodctos.push(nrodcto);
                 } else {
                     estadoHtml = '<span class="tag tag-green">✅ Encontrado</span>';
                     const itm   = soporte.data[0];
                     const path  = itm.storage_Path  ?? '';
                     const fReg  = itm.fechaRegistro ?? '';
+                    if (path) soportesPaths.push(path);
                     accionHtml  = path
                         ? `<button class="btn btn-sm btn-outline-success"
                                   onclick='verSoporte(${JSON.stringify(nrodcto)}, ${JSON.stringify(fReg)}, ${JSON.stringify(path)})'>
@@ -183,7 +189,9 @@ async function verDia(fecha) {
             progFill.style.width = pct + '%';
             progCnt.textContent  = `${done} / ${nrodctos.length}`;
             if (done === nrodctos.length) {
+                todosRowItems = [...rowItems];
                 setTimeout(() => progBar.classList.add('d-none'), 800);
+                setTimeout(() => actualizarKpi(nrodctos.length, soportesPaths.length), 900);
                 consultaController = null;
             }
         }));
@@ -201,8 +209,14 @@ function cerrarPanel() {
         consultaController.abort();
         consultaController = null;
     }
-    diaActivo = null;
+    diaActivo           = null;
+    soportesPaths       = [];
+    faltantesNrodctos   = [];
+    todosRowItems       = [];
+    modoFiltroFaltantes = false;
     document.getElementById('panelDia').classList.add('d-none');
+    document.getElementById('panelKpi').classList.add('d-none');
+    document.getElementById('zipProgreso').classList.add('d-none');
 }
 
 // ── Modal Soporte ──────────────────────────────────────────────
@@ -226,6 +240,157 @@ function verSoporte(nrodcto, fechaRegistro, storagePath) {
     link.classList.toggle('disabled', !storagePath);
 
     modalSoporte.show();
+}
+
+// ── Render fila de registro (global para reutilizar en filtros) ────────
+function renderFilaRegistro(r) {
+    return `
+        <tr>
+            <td><code>${esc(r.nrodcto)}</code></td>
+            <td>${esc(r.destino)}</td>
+            <td class="text-end">${fmtCOP.format(r.cuotaMod)}</td>
+            <td>${esc(r.nroPlanilla)}</td>
+            <td>${r.estadoHtml}</td>
+            <td>${r.accionHtml}</td>
+        </tr>`;
+}
+
+// ── KPI ─────────────────────────────────────────────────────────
+function actualizarKpi(total, encontrados) {
+    const faltantes = total - encontrados;
+    document.getElementById('kpiTotal').textContent       = total;
+    document.getElementById('kpiEncontrados').textContent = encontrados;
+    document.getElementById('kpiFaltantes').textContent   = faltantes;
+    document.getElementById('btnDescargarTodos').disabled = encontrados === 0;
+    document.getElementById('btnVerFaltantes').disabled   = faltantes === 0;
+    document.getElementById('btnDescargarLista').disabled = faltantes === 0;
+    document.getElementById('panelKpi').classList.remove('d-none');
+}
+
+// ── Ver solo faltantes en la tabla ──────────────────────────────
+function verFaltantes() {
+    if (!pagPanel) return;
+
+    const btn = document.getElementById('btnVerFaltantes');
+
+    if (modoFiltroFaltantes) {
+        // Restaurar todos los registros
+        modoFiltroFaltantes = false;
+        btn.textContent = '🔍 Ver';
+        btn.classList.replace('btn-danger', 'btn-outline-danger');
+        pagPanel.setData(todosRowItems, renderFilaRegistro);
+    } else {
+        // Filtrar a solo los faltantes
+        modoFiltroFaltantes = true;
+        btn.textContent = '🔍 Ver todos';
+        btn.classList.replace('btn-outline-danger', 'btn-danger');
+        const faltantes = todosRowItems.filter(r =>
+            faltantesNrodctos.includes(r.nrodcto)
+        );
+        pagPanel.setData(faltantes, renderFilaRegistro);
+    }
+}
+
+// ── Descargar lista de faltantes (CSV) ────────────────────────
+function descargarListaFaltantes() {
+    if (!faltantesNrodctos.length) return;
+
+    const encabezado = 'Nrodcto,Destino,Nro. Planilla';
+    const filas = todosRowItems
+        .filter(r => faltantesNrodctos.includes(r.nrodcto))
+        .map(r => [
+            `"${r.nrodcto}"`,
+            `"${r.destino}"`,
+            `"${r.nroPlanilla}"`
+        ].join(','));
+
+    const csv  = [encabezado, ...filas].join('\r\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `faltantes_${diaActivo ?? 'lista'}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+// ── Descargar ZIP ────────────────────────────────────────
+async function descargarTodos() {
+    const paths = [...soportesPaths];
+    if (!paths.length) return;
+
+    const btn       = document.getElementById('btnDescargarTodos');
+    const progBar   = document.getElementById('zipProgreso');
+    const progLabel = document.getElementById('zipProgresoLabel');
+    const progPct   = document.getElementById('zipProgresoPct');
+    const progFill  = document.getElementById('zipProgresoFill');
+
+    btn.disabled = true;
+    progLabel.textContent = 'Preparando ZIP...';
+    progPct.textContent   = '';
+    progFill.style.width  = '4%';
+    progBar.classList.remove('d-none');
+
+    try {
+        const resp = await fetch('/api/detalle/descargar-zip', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(paths)
+        });
+
+        if (!resp.ok) {
+            mostrarModal('Error', `No se pudo generar el ZIP. (${resp.status})`, 'error');
+            return;
+        }
+
+        const total  = parseInt(resp.headers.get('Content-Length') || '0', 10);
+        const reader = resp.body.getReader();
+        const chunks = [];
+        let received = 0;
+
+        progLabel.textContent = 'Descargando ZIP...';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            chunks.push(value);
+            received += value.length;
+
+            if (total > 0) {
+                const pct = Math.min(Math.round((received / total) * 100), 99);
+                progFill.style.width = pct + '%';
+                progPct.textContent  = pct + '%';
+            } else {
+                const mb = (received / 1024 / 1024).toFixed(1);
+                progLabel.textContent = `Descargando... ${mb} MB`;
+            }
+        }
+
+        // Guardar archivo
+        const blob = new Blob(chunks, { type: 'application/zip' });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href     = url;
+        a.download = `soportes_${diaActivo ?? 'descarga'}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        progFill.style.width = '100%';
+        progPct.textContent  = '100%';
+        progLabel.textContent = '✅ Descarga completada';
+        setTimeout(() => progBar.classList.add('d-none'), 2500);
+
+    } catch (e) {
+        console.error(e);
+        mostrarModal('Error', 'Error al descargar el ZIP.', 'error');
+        progBar.classList.add('d-none');
+    } finally {
+        btn.disabled = false;
+    }
 }
 
 // ── Helpers ──────────────────────────────────────────────────────

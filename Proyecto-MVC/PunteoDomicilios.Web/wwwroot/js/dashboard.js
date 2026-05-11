@@ -4,8 +4,7 @@
 const fmtCOP = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 });
 const fmtNum = new Intl.NumberFormat('es-CO');
 
-let chartTimeline = null;
-let pagResumen    = null;
+let pagResumen = null;
 
 // ── Al cargar la página ────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
@@ -55,7 +54,6 @@ async function iniciarConsulta() {
 
     setBusy(true);
     resetKpis();
-    ocultarCharts();
 
     try {
         // Obtener registros del día
@@ -79,10 +77,6 @@ async function iniciarConsulta() {
         actualizarKpi('kpiPlanillas', planillasSet.size, '');
         actualizarKpi('kpiSoporte',   mensajerosSet.size, '');
         document.getElementById('areaKpi').classList.remove('d-none');
-
-        // Timeline
-        await cargarTimeline();
-        document.getElementById('areaCharts').classList.remove('d-none');
 
     } catch (e) {
         console.error(e);
@@ -115,69 +109,6 @@ function resetKpis() {
         const el = document.getElementById(id);
         if (el) el.textContent = '—';
     });
-}
-
-function ocultarCharts() {
-    document.getElementById('areaCharts').classList.add('d-none');
-}
-
-// ── Timeline Chart ──────────────────────────────────────────────
-async function cargarTimeline() {
-    try {
-        const res = await fetch('/api/timeline?dias=7');
-        if (!res.ok) return;
-        const dias = await res.json();
-
-        const labels     = dias.map(d => d.fecha);
-        const encontrados = dias.map(d => d.encontrados);
-        const faltantes   = dias.map(d => d.faltantes);
-        const totales     = dias.map(d => d.total);
-
-        const ctx = document.getElementById('chartTimeline').getContext('2d');
-        if (chartTimeline) chartTimeline.destroy();
-
-        chartTimeline = new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels,
-                datasets: [
-                    {
-                        label: 'Entregados',
-                        data: encontrados,
-                        backgroundColor: '#16a34a',
-                        borderRadius: 4,
-                    },
-                    {
-                        label: 'Faltantes',
-                        data: faltantes,
-                        backgroundColor: '#dc2626',
-                        borderRadius: 4,
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: true,
-                plugins: {
-                    legend: { position: 'top' },
-                    tooltip: {
-                        callbacks: {
-                            afterBody: (items) => {
-                                const idx = items[0].dataIndex;
-                                return `Total: ${totales[idx]}`;
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    x: { stacked: true },
-                    y: { stacked: true, beginAtZero: true }
-                }
-            }
-        });
-    } catch (e) {
-        console.warn('No se pudo cargar el timeline:', e);
-    }
 }
 
 // ── Helpers ──────────────────────────────────────────────────────

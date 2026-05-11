@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using Microsoft.AspNetCore.Mvc;
 using PunteoDomicilios.Web.Services;
 
@@ -105,6 +106,48 @@ public class DetalleController : Controller
 
         var fileName = Path.GetFileName(path);
         return File(stream, "application/pdf", fileName);
+    }
+
+    /// <summary>
+    /// Descarga todos los PDFs indicados empaquetados en un ZIP.
+    /// POST /api/detalle/descargar-zip  body: ["soportes/...", ...]
+    /// </summary>
+    [HttpPost("/api/detalle/descargar-zip")]
+    public async Task<IActionResult> DescargarZip([FromBody] List<string> paths, CancellationToken ct)
+    {
+        var usuario = HttpContext.Session.GetString(SessionKeys.Usuario);
+        if (string.IsNullOrEmpty(usuario))
+            return Unauthorized(new { error = "Sesión no iniciada." });
+
+        if (paths is null || paths.Count == 0)
+            return BadRequest(new { error = "Lista de rutas vacía." });
+
+        if (paths.Any(p => string.IsNullOrWhiteSpace(p) || p.Contains("..") || p.Contains('\\')))
+            return BadRequest(new { error = "Rutas no válidas." });
+
+        using var mem = new MemoryStream();
+        using (var zip = new ZipArchive(mem, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            foreach (var path in paths.Distinct())
+            {
+                if (ct.IsCancellationRequested) break;
+
+                var pdfStream = await _descargaService.ObtenerArchivoAsync(path, ct);
+                if (pdfStream is null)
+                {
+                    _logger.LogWarning("ZIP: no se pudo obtener {Path}", path);
+                    continue;
+                }
+
+                var entry = zip.CreateEntry(Path.GetFileName(path), CompressionLevel.Fastest);
+                await using var entryStream = entry.Open();
+                await pdfStream.CopyToAsync(entryStream, ct);
+            }
+        }
+
+        mem.Position = 0;
+        var zipName = $"soportes_{DateTime.Now:yyyyMMdd_HHmm}.zip";
+        return File(mem.ToArray(), "application/zip", zipName);
     }
 
     private static string FormatMesLabel(string mesISO)

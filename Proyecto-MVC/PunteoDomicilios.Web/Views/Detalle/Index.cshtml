@@ -59,6 +59,47 @@
             </div>
         </div>
 
+        <!-- KPI: visible después de verificar soportes -->
+        <div id="panelKpi" class="kpi-strip mb-3 d-none">
+            <div class="kpi-card">
+                <span class="kpi-value" id="kpiTotal">0</span>
+                <span class="kpi-label">Total archivos</span>
+            </div>
+            <div class="kpi-card kpi-card--green">
+                <span class="kpi-value" id="kpiEncontrados">0</span>
+                <span class="kpi-label">Encontrados</span>
+                <button id="btnDescargarTodos" class="btn btn-sm btn-success kpi-btn mt-2"
+                        onclick="descargarTodos()" disabled>
+                    ⬇ Descargar todos
+                </button>
+            </div>
+            <div class="kpi-card kpi-card--red">
+                <span class="kpi-value" id="kpiFaltantes">0</span>
+                <span class="kpi-label">Faltantes</span>
+                <div class="kpi-btn-group mt-2">
+                    <button id="btnVerFaltantes" class="btn btn-sm btn-outline-danger kpi-btn"
+                            onclick="verFaltantes()" disabled>
+                        🔍 Ver
+                    </button>
+                    <button id="btnDescargarLista" class="btn btn-sm btn-danger kpi-btn"
+                            onclick="descargarListaFaltantes()" disabled>
+                        📊 Descargar lista
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Barra de progreso descarga ZIP -->
+        <div id="zipProgreso" class="progreso-container mb-3 d-none">
+            <div class="d-flex justify-content-between mb-1 small text-muted">
+                <span id="zipProgresoLabel">Preparando ZIP...</span>
+                <span id="zipProgresoPct"></span>
+            </div>
+            <div class="progress-batch">
+                <div id="zipProgresoFill" class="progress-batch__fill" style="width:0%"></div>
+            </div>
+        </div>
+
         <div id="panelLoading" class="skeleton-rows d-none">
             <div class="skeleton"></div><div class="skeleton"></div>
         </div>
