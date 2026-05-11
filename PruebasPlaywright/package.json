@@ -5,6 +5,8 @@
   "scripts": {
     "test": "playwright test",
     "test:headed": "playwright test --headed",
+    "test:funcional": "playwright test tests/prueba-funcional-completa.spec.ts --headed --project=chromium",
+    "test:funcional:slow": "playwright test tests/prueba-funcional-completa.spec.ts --headed --project=chromium --slow-mo=400",
     "test:bd": "playwright test tests/mostrar-datos-bd.spec.ts --headed",
     "test:bd:slow": "playwright test tests/mostrar-datos-bd.spec.ts --headed --slow-mo=800",
     "test:e2e": "playwright test -g \"BD-11\" --headed",

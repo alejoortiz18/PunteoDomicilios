@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Diagrama de Flujo — Módulo Soportes Físicos · HELPHARMA</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #f4f6fa;
+      color: #1a1d23;
+      min-height: 100vh;
+      padding: 32px 24px 48px;
+    }
+
+    header {
+      max-width: 1100px;
+      margin: 0 auto 32px;
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      border-bottom: 2px solid #e2e6ef;
+      padding-bottom: 24px;
+    }
+
+    .badge {
+      background: #2563eb;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      padding: 4px 10px;
+      border-radius: 20px;
+      white-space: nowrap;
+      margin-top: 4px;
+    }
+
+    header h1 {
+      font-size: 22px;
+      font-weight: 700;
+      line-height: 1.3;
+      color: #0f172a;
+    }
+
+    header p {
+      font-size: 13px;
+      color: #64748b;
+      margin-top: 4px;
+    }
+
+    .main-grid {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 300px;
+      gap: 24px;
+      align-items: start;
+    }
+
+    .card {
+      background: #fff;
+      border: 1px solid #e2e6ef;
+      border-radius: 14px;
+      padding: 28px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.06);
+    }
+
+    .card h2 {
+      font-size: 14px;
+      font-weight: 700;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      margin-bottom: 20px;
+    }
+
+    /* ── Diagrama ── */
+    #diagrama { text-align: center; overflow-x: auto; }
+    #diagrama .mermaid { display: inline-block; min-width: 340px; }
+
+    /* ── Leyenda de resultados ── */
+    .legend-list { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+    .legend-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    .dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      flex-shrink: 0; margin-top: 3px;
+    }
+    .dot-ok      { background: #22c55e; }
+    .dot-invalid { background: #f59e0b; }
+    .dot-err1    { background: #ef4444; }
+    .dot-err2    { background: #dc2626; }
+
+    .legend-list code {
+      display: block;
+      margin-top: 3px;
+      font-size: 11px;
+      background: #f1f5f9;
+      padding: 3px 7px;
+      border-radius: 5px;
+      color: #334155;
+    }
+
+    /* ── Fases ── */
+    .phases { display: flex; flex-direction: column; gap: 12px; }
+    .phase {
+      border-left: 3px solid #2563eb;
+      padding: 10px 14px;
+      background: #f8fafc;
+      border-radius: 0 8px 8px 0;
+    }
+    .phase.yellow { border-color: #f59e0b; }
+    .phase.green  { border-color: #22c55e; }
+    .phase.red    { border-color: #ef4444; }
+    .phase-title  { font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 4px; }
+    .phase p      { font-size: 12px; color: #64748b; line-height: 1.45; }
+    .phase code   { font-size: 11px; background: #e2e8f0; padding: 1px 5px; border-radius: 4px; color: #1e40af; }
+
+    /* ── Configuración ── */
+    .config-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .config-table th {
+      text-align: left; background: #f1f5f9; padding: 7px 10px;
+      color: #475569; font-weight: 600; border-bottom: 1px solid #e2e6ef;
+    }
+    .config-table td {
+      padding: 7px 10px; border-bottom: 1px solid #f1f5f9;
+      color: #334155; vertical-align: top;
+    }
+    .config-table tr:last-child td { border-bottom: none; }
+    .mono { font-family: monospace; font-size: 11px; }
+
+    footer {
+      max-width: 1100px; margin: 32px auto 0;
+      font-size: 11px; color: #94a3b8; text-align: right;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Módulo de Procesamiento de Soportes Físicos</h1>
+    <p>PunteoDomicilios.Web · HELPHARMA · 2026-05-11</p>
+  </div>
+  <span class="badge">Diagrama de Flujo</span>
+</header>
+
+<div class="main-grid">
+
+  <!-- Diagrama principal -->
+  <div class="card" id="diagrama">
+    <h2>Flujo de procesamiento por ítem</h2>
+    <div class="mermaid">
+flowchart TD
+    A([🚀 Inicio\nPOST /soportes-fisicos/procesar]) --> B[Recibir ProcesarManualDto\nLista de ítems]
+    B --> C{¿Hay más ítems\npor procesar?}
+
+    C -- ❌ No --> Z([🏁 Fin\nRetornar resultados a la Vista])
+
+    C -- ✅ Sí --> D[Tomar siguiente ítem\nSoporte + Archivo PDF]
+    D --> E{¿Soporte vacío\no Archivo nulo?}
+
+    E -- SÍ --> F["⚠️ resultado = 'Fila inválida'"]
+    F --> C
+
+    E -- NO --> G[💾 Guardar PDF en\ncarpeta temporal del sistema]
+
+    G --> H["🌐 API #1 — SoporteDatosService\nPOST api-soportes.helpharma.com.co\n/api/DocSoporte/soportes/DatosSoportes\nHeader: X-API-KEY"]
+
+    H --> I{¿HTTP 2xx?}
+
+    I -- ❌ Error --> J["🔴 resultado = soporte → Error LEER DATOS: msg"]
+    J --> K
+
+    I -- ✅ OK --> L[Deserializar SoporteClinicoDto\nDatos clínicos del paciente y medicamentos]
+
+    L --> M["🌐 API #2 — SoporteFisicoService\nPOST intranet.helpharma.com\n/api/v1/soporte/fisico\nBearer Token · multipart/form-data"]
+
+    M --> N{¿HTTP 2xx?}
+
+    N -- ❌ Error --> O["🔴 resultado = soporte → Error ENVIANDO ARCHIVO: msg"]
+    O --> K
+
+    N -- ✅ OK --> P["✅ resultado = soporte → OK"]
+    P --> K
+
+    K["🧹 FINALLY\nEliminar archivo temporal\n(siempre, incluso si hay error)"] --> C
+
+    style A fill:#2563eb,color:#fff,stroke:none
+    style Z fill:#0f172a,color:#fff,stroke:none
+    style F fill:#fef3c7,color:#92400e,stroke:#f59e0b
+    style J fill:#fee2e2,color:#991b1b,stroke:#ef4444
+    style O fill:#fee2e2,color:#991b1b,stroke:#ef4444
+    style P fill:#dcfce7,color:#166534,stroke:#22c55e
+    style K fill:#f1f5f9,color:#475569,stroke:#cbd5e1
+    style H fill:#eff6ff,color:#1e40af,stroke:#93c5fd
+    style M fill:#eff6ff,color:#1e40af,stroke:#93c5fd
+    </div>
+  </div>
+
+  <!-- Columna derecha -->
+  <div style="display:flex;flex-direction:column;gap:20px;">
+
+    <!-- Resultados posibles -->
+    <div class="card">
+      <h2>Resultados posibles</h2>
+      <ul class="legend-list">
+        <li>
+          <span class="dot dot-ok"></span>
+          <div>
+            <strong>Éxito completo</strong>
+            <code>{soporte} → OK</code>
+          </div>
+        </li>
+        <li>
+          <span class="dot dot-invalid"></span>
+          <div>
+            <strong>Validación fallida</strong>
+            <code>Fila inválida</code>
+          </div>
+        </li>
+        <li>
+          <span class="dot dot-err1"></span>
+          <div>
+            <strong>Error consultando datos</strong>
+            <code>{soporte} → Error LEER DATOS: {msg}</code>
+          </div>
+        </li>
+        <li>
+          <span class="dot dot-err2"></span>
+          <div>
+            <strong>Error enviando archivo</strong>
+            <code>{soporte} → Error ENVIANDO ARCHIVO: {msg}</code>
+          </div>
+        </li>
+      </ul>
+    </div>
+
+    <!-- Fases -->
+    <div class="card">
+      <h2>Fases del proceso</h2>
+      <div class="phases">
+        <div class="phase yellow">
+          <div class="phase-title">① Validación</div>
+          <p>Verificar que <code>Soporte</code> y <code>Archivo</code> no sean nulos. Si fallan → <code>Fila inválida</code>.</p>
+        </div>
+        <div class="phase">
+          <div class="phase-title">② Almacenamiento temporal</div>
+          <p>Guardar el PDF en <code>Path.GetTempPath()</code> con nombre original.</p>
+        </div>
+        <div class="phase">
+          <div class="phase-title">③ API #1 — Datos clínicos</div>
+          <p>POST con <code>X-API-KEY</code>. Devuelve <code>SoporteClinicoDto</code> con datos del paciente, convenio y medicamentos.</p>
+        </div>
+        <div class="phase">
+          <div class="phase-title">④ API #2 — Envío físico</div>
+          <p>POST <code>multipart/form-data</code> con todos los campos clínicos + PDF (<code>Bearer token</code>).</p>
+        </div>
+        <div class="phase green">
+          <div class="phase-title">⑤ Limpieza (finally)</div>
+          <p>Siempre elimina el archivo temporal, independientemente del resultado.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Configuración -->
+    <div class="card">
+      <h2>Configuración requerida</h2>
+      <table class="config-table">
+        <thead>
+          <tr><th>Clave</th><th>Valor</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="mono">ApiSoportes:BaseUrl</span></td>
+            <td><span class="mono">api-soportes.helpharma.com.co</span></td>
+          </tr>
+          <tr>
+            <td><span class="mono">ApiSoportes:ApiKey</span></td>
+            <td><span class="mono">ABC123456789</span></td>
+          </tr>
+          <tr>
+            <td><span class="mono">ApiSoportes:TimeoutSeconds</span></td>
+            <td><span class="mono">30</span></td>
+          </tr>
+          <tr>
+            <td><span class="mono">ApiInterna:BaseUrl</span></td>
+            <td><span class="mono">intranet.helpharma.com</span></td>
+          </tr>
+          <tr>
+            <td><span class="mono">ApiInterna:Token</span></td>
+            <td><span class="mono">Bearer ···</span></td>
+          </tr>
+          <tr>
+            <td><span class="mono">ApiInterna:TimeoutSeconds</span></td>
+            <td><span class="mono">120 (upload PDF)</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+</div>
+
+<footer>PunteoDomicilios · HELPHARMA · Generado 2026-05-11</footer>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      primaryColor: '#eff6ff',
+      primaryTextColor: '#1e3a5f',
+      primaryBorderColor: '#93c5fd',
+      lineColor: '#94a3b8',
+      secondaryColor: '#f8fafc',
+      tertiaryColor: '#f1f5f9',
+      fontFamily: 'Inter, sans-serif',
+      fontSize: '13px'
+    },
+    flowchart: { curve: 'basis', padding: 20 }
+  });
+</script>
+</body>
+</html>

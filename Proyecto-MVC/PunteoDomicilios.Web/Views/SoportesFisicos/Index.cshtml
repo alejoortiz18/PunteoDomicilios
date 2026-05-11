@@ -1,0 +1,312 @@
+@{
+    ViewData["Title"] = "Soportes Físicos";
+    Layout = "_Layout";
+    var usuario = ViewBag.Usuario as string ?? "";
+    var resultados = ViewBag.Resultados as List<(string Soporte, bool Exito, string Mensaje)>;
+}
+
+<style>
+/* ── File drop zone ───────────────────────────────────────── */
+.file-zone {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border: 1.5px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 8px 12px;
+    background: var(--bg-page);
+    cursor: pointer;
+    transition: border-color .2s, background .2s;
+    min-height: 38px;
+    user-select: none;
+}
+.file-zone:hover {
+    border-color: var(--color-primary);
+    background: var(--color-primary-light);
+}
+.file-zone.has-file {
+    border-color: var(--color-green);
+    background: var(--color-green-light);
+    border-style: solid;
+}
+.file-zone .fz-icon {
+    font-size: 1.1rem;
+    flex-shrink: 0;
+    line-height: 1;
+}
+.file-zone .fz-text {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+.file-zone .fz-label {
+    font-size: .72rem;
+    color: var(--text-muted);
+    line-height: 1.1;
+}
+.file-zone .fz-name {
+    font-size: .8rem;
+    font-weight: 600;
+    color: var(--text-main);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px;
+}
+.file-zone.has-file .fz-label { color: var(--color-green); }
+.file-zone.has-file .fz-icon  { filter: none; }
+input[type="file"].file-real   { display: none; }
+
+/* ── Fila soporte ─────────────────────────────────────────── */
+.fila-soporte {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    transition: box-shadow .15s;
+}
+.fila-soporte:hover { box-shadow: var(--shadow); }
+</style>
+
+<!-- Encabezado -->
+<section class="section-card mt-4">
+    <div class="section-header">
+        <h2 class="section-title">📤 Procesamiento de Soportes Físicos</h2>
+    </div>
+    <p class="text-muted small mb-0">
+        Ingresa el ID de soporte y el PDF correspondiente para cada registro.
+        El sistema consultará los datos clínicos y enviará el soporte a la API interna.
+    </p>
+</section>
+
+<!-- Formulario de carga -->
+<section class="section-card mt-3">
+    <div class="section-header">
+        <h2 class="section-title">📋 Ítems a Procesar</h2>
+        <button type="button" class="btn btn-sm btn-outline-primary" onclick="agregarFila()">
+            ➕ Agregar fila
+        </button>
+    </div>
+
+    <form id="formSoportes"
+          asp-controller="SoportesFisicos" asp-action="Procesar"
+          method="post" enctype="multipart/form-data">
+
+        <div id="contenedorFilas">
+            @* Fila inicial *@
+            <div class="fila-soporte row g-2 align-items-center">
+                <div class="col-sm-4">
+                    <input type="text"
+                           name="Items[0].Soporte"
+                           class="form-control form-control-sm"
+                           placeholder="Código barras(ej. C5-1234)"
+                           required />
+                </div>
+                <div class="col-sm-5">
+                    <input type="file"
+                           id="archivo_0"
+                           name="Items[0].Archivo"
+                           class="file-real"
+                           accept=".pdf"
+                           required
+                           onchange="actualizarZona(this)" />
+                    <label for="archivo_0" class="file-zone w-100">
+                        <span class="fz-icon">📎</span>
+                        <span class="fz-text">
+                            <span class="fz-label">Adjuntar PDF · Click para seleccionar</span>
+                            <span class="fz-name"></span>
+                        </span>
+                    </label>
+                </div>
+                <div class="col-sm-3">
+                    <button type="button" class="btn btn-outline-danger btn-sm w-100"
+                            onclick="eliminarFila(this)">🗑 Quitar</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-3 d-flex gap-2">
+            <button id="btnProcesar" type="submit" class="btn btn-primary">
+                <span id="spinnerProcesar" class="spinner-border spinner-border-sm d-none me-1"></span>
+                ⚙️ Procesar Soportes
+            </button>
+            <button type="reset" class="btn btn-outline-secondary" onclick="resetFormulario()">
+                🔄 Limpiar
+            </button>
+        </div>
+    </form>
+</section>
+
+<!-- Resultados -->
+@if (resultados is { Count: > 0 })
+{
+    int ok = resultados.Count(r => r.Exito);
+    int err = resultados.Count(r => !r.Exito);
+
+    <section class="section-card mt-3">
+        <div class="section-header">
+            <h2 class="section-title">📊 Resultados del Procesamiento</h2>
+        </div>
+
+        <div class="kpi-row mb-3">
+            <div class="kpi-card kpi-green">
+                <div class="kpi-label">Exitosos</div>
+                <div class="kpi-value">@ok</div>
+            </div>
+            <div class="kpi-card kpi-cyan">
+                <div class="kpi-label">Total enviados</div>
+                <div class="kpi-value">@resultados.Count</div>
+            </div>
+            <div class="kpi-card @(err > 0 ? "kpi-red" : "kpi-blue")">
+                <div class="kpi-label">Con error</div>
+                <div class="kpi-value">@err</div>
+            </div>
+        </div>
+
+        <table class="punteo-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>ID Soporte</th>
+                    <th>Estado</th>
+                    <th>Mensaje</th>
+                </tr>
+            </thead>
+            <tbody>
+                @for (int i = 0; i < resultados.Count; i++)
+                {
+                    var r = resultados[i];
+                    <tr>
+                        <td class="text-muted small">@(i + 1)</td>
+                        <td><code>@r.Soporte</code></td>
+                        <td>
+                            @if (r.Exito)
+                            {
+                                <span class="badge bg-success">✅ OK</span>
+                            }
+                            else if (r.Mensaje.StartsWith("ID de soporte vacío") ||
+                                     r.Mensaje.StartsWith("Archivo no adjuntado") ||
+                                     r.Mensaje.StartsWith("Formato no permitido"))
+                            {
+                                <span class="badge bg-warning text-dark">⚠️ Inválida</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-danger">❌ Error</span>
+                            }
+                        </td>
+                        <td class="small">@r.Mensaje</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </section>
+}
+
+@section Scripts {
+<script>
+    let indiceFila = 1;
+
+    function actualizarZona(input) {
+        const zona = input.nextElementSibling;          // el <label>
+        const nombre = zona.querySelector('.fz-name');
+        const etiqueta = zona.querySelector('.fz-label');
+        if (input.files && input.files[0]) {
+            const archivo = input.files[0];
+            nombre.textContent = archivo.name;
+            etiqueta.textContent = formatBytes(archivo.size);
+            zona.classList.add('has-file');
+            zona.querySelector('.fz-icon').textContent = '📄';
+        } else {
+            nombre.textContent = '';
+            etiqueta.textContent = 'Adjuntar PDF · Click para seleccionar';
+            zona.classList.remove('has-file');
+            zona.querySelector('.fz-icon').textContent = '📎';
+        }
+    }
+
+    function formatBytes(bytes) {
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+        return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    function agregarFila() {
+        const idx = indiceFila++;
+        const container = document.getElementById('contenedorFilas');
+        const div = document.createElement('div');
+        div.className = 'fila-soporte row g-2 align-items-center';
+        div.innerHTML = `
+            <div class="col-sm-4">
+                <input type="text"
+                       name="Items[${idx}].Soporte"
+                       class="form-control form-control-sm"
+                       placeholder="Código barras(ej. C5-1234)"
+                       required />
+            </div>
+            <div class="col-sm-5">
+                <input type="file"
+                       id="archivo_${idx}"
+                       name="Items[${idx}].Archivo"
+                       class="file-real"
+                       accept=".pdf"
+                       required
+                       onchange="actualizarZona(this)" />
+                <label for="archivo_${idx}" class="file-zone w-100">
+                    <span class="fz-icon">📎</span>
+                    <span class="fz-text">
+                        <span class="fz-label">Adjuntar PDF · Click para seleccionar</span>
+                        <span class="fz-name"></span>
+                    </span>
+                </label>
+            </div>
+            <div class="col-sm-3">
+                <button type="button" class="btn btn-outline-danger btn-sm w-100"
+                        onclick="eliminarFila(this)">🗑 Quitar</button>
+            </div>`;
+        container.appendChild(div);
+    }
+
+    function eliminarFila(btn) {
+        const fila = btn.closest('.fila-soporte');
+        const todas = document.querySelectorAll('.fila-soporte');
+        if (todas.length > 1) {
+            fila.remove();
+            reindexarFilas();
+        }
+    }
+
+    function reindexarFilas() {
+        document.querySelectorAll('.fila-soporte').forEach((fila, idx) => {
+            fila.querySelectorAll('input').forEach(input => {
+                input.name = input.name.replace(/\[\d+\]/, `[${idx}]`);
+                if (input.type === 'file') {
+                    input.id = `archivo_${idx}`;
+                    const label = input.nextElementSibling;
+                    if (label) label.setAttribute('for', `archivo_${idx}`);
+                }
+            });
+        });
+        indiceFila = document.querySelectorAll('.fila-soporte').length;
+    }
+
+    function resetFormulario() {
+        const container = document.getElementById('contenedorFilas');
+        const filas = container.querySelectorAll('.fila-soporte');
+        filas.forEach((f, i) => { if (i > 0) f.remove(); });
+        container.querySelector('input[type="text"]').value = '';
+        const fileInput = container.querySelector('input[type="file"]');
+        fileInput.value = '';
+        actualizarZona(fileInput);
+        indiceFila = 1;
+    }
+
+    document.getElementById('formSoportes').addEventListener('submit', function () {
+        const btn = document.getElementById('btnProcesar');
+        const spinner = document.getElementById('spinnerProcesar');
+        btn.disabled = true;
+        spinner.classList.remove('d-none');
+    });
+</script>
+}

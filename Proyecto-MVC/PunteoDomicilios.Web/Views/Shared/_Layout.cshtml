@@ -37,6 +37,11 @@
             <span class="nav-icon">📄</span>
             <span>Detalle mes</span>
         </a>
+        <a class="nav-item @(controller == "soportesfisicos" ? "active" : "")"
+           asp-controller="SoportesFisicos" asp-action="Index">
+            <span class="nav-icon">📤</span>
+            <span>Soportes</span>
+        </a>
     </nav>
 
     @if (!string.IsNullOrEmpty(usuarioActual))

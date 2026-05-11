@@ -76,7 +76,30 @@ try
         AllowAutoRedirect = false,
         UseCookies = false,  // Cookies manejadas manualmente en DescargaService
     });
+    // ── HttpClient API Soportes (consulta datos clínicos) ────────────────────
+    var soportesConfig = builder.Configuration.GetSection("ApiSoportes");
+    var soportesBaseUrl = soportesConfig["BaseUrl"] ?? throw new InvalidOperationException("ApiSoportes:BaseUrl no configurado.");
+    var soportesApiKey  = soportesConfig["ApiKey"]  ?? string.Empty;
+    var soportesTimeout = soportesConfig.GetValue("TimeoutSeconds", 30);
 
+    builder.Services.AddHttpClient<ISoporteDatosService, SoporteDatosService>(client =>
+    {
+        client.BaseAddress = new Uri(soportesBaseUrl);
+        client.Timeout = TimeSpan.FromSeconds(soportesTimeout);
+        if (!string.IsNullOrWhiteSpace(soportesApiKey))
+            client.DefaultRequestHeaders.Add("X-API-KEY", soportesApiKey);
+    });
+
+    // ── HttpClient Soporte Físico (envío multipart a ApiInterna) ─────────────
+    var fisicoTimeout = apiConfig.GetValue("FisicoTimeoutSeconds", 120);
+    builder.Services.AddHttpClient<ISoporteFisicoService, SoporteFisicoService>(client =>
+    {
+        client.BaseAddress = new Uri(apiBaseUrl);
+        client.Timeout = TimeSpan.FromSeconds(fisicoTimeout);
+        if (!string.IsNullOrWhiteSpace(token))
+            client.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+    });
     // ── Build ─────────────────────────────────────────────────────────────────
     var app = builder.Build();
 
