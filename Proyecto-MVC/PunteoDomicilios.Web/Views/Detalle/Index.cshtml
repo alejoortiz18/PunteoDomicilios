@@ -72,6 +72,17 @@
                         onclick="descargarTodos()" disabled>
                     ⬇ Descargar todos
                 </button>
+                <div class="kpi-prefix-group mt-2">
+                    <label class="small text-muted d-block mb-1">Descargar por prefijo</label>
+                    <div class="input-group input-group-sm">
+                        <input type="text" id="inputPrefijo" class="form-control"
+                               placeholder="Ej: KI" maxlength="20" autocomplete="off" />
+                        <button id="btnDescargarPrefijo" class="btn btn-sm btn-outline-success"
+                                onclick="descargarPorPrefijo()" disabled>
+                            ⬇ Prefijo
+                        </button>
+                    </div>
+                </div>
             </div>
             <div class="kpi-card kpi-card--red">
                 <span class="kpi-value" id="kpiFaltantes">0</span>
@@ -127,5 +138,5 @@
 <script>
     const MES_ACTUAL = '@mes';
 </script>
-<script src="~/js/detalle.js"></script>
+<script src="~/js/detalle.js" asp-append-version="true"></script>
 }

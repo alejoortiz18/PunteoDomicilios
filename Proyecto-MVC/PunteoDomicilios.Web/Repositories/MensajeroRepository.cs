@@ -29,11 +29,13 @@ public class MensajeroRepository : IMensajeroRepository
     public async Task<IEnumerable<MvMensajer>> ObtenerRegistrosAsync(string usuario, DateOnly fecha)
     {
         const string sql = """
-            SELECT Mensajero, Fecha, Nrodcto, Destino, Refrigera,
-                   CuotaMod, Domicilio, Observacio, NroConsig, VlrConsig,
-                   NroPlanilla, Usuario, Id
+            SELECT RTRIM(Mensajero) AS Mensajero, Fecha, RTRIM(Nrodcto) AS Nrodcto,
+                   RTRIM(Destino) AS Destino, Refrigera,
+                   CuotaMod, Domicilio, RTRIM(Observacio) AS Observacio,
+                   RTRIM(NroConsig) AS NroConsig, VlrConsig,
+                   NroPlanilla, RTRIM(Usuario) AS Usuario, Id
             FROM MvMensajer
-            WHERE Usuario = @Usuario
+            WHERE RTRIM(Usuario) = @Usuario
               AND CAST(Fecha AS DATE) = @Fecha
             """;
 

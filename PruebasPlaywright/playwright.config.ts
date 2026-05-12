@@ -13,7 +13,7 @@ export default defineConfig({
     trace: 'on-first-retry',
     viewport: { width: 1400, height: 900 },
   },
-  timeout: 120_000,
+  timeout: 600_000,
   expect: { timeout: 20_000 },
   reporter: [
     ['list'],

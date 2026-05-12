@@ -71,11 +71,9 @@ async function iniciarConsulta() {
         // KPIs
         const totalCuota     = registros.reduce((s, r) => s + (r.cuotaMod || 0), 0);
         const planillasSet   = new Set(registros.map(r => r.nroPlanilla).filter(Boolean));
-        const mensajerosSet  = new Set(registros.map(r => r.mensajero).filter(Boolean));
         actualizarKpi('kpiTotal',     registros.length, '');
         actualizarKpi('kpiCuota',     totalCuota, '', true);
         actualizarKpi('kpiPlanillas', planillasSet.size, '');
-        actualizarKpi('kpiSoporte',   mensajerosSet.size, '');
         document.getElementById('areaKpi').classList.remove('d-none');
 
     } catch (e) {
@@ -105,7 +103,7 @@ function actualizarKpi(id, valor, sufijo = '', esCOP = false) {
 }
 
 function resetKpis() {
-    ['kpiTotal','kpiCuota','kpiPlanillas','kpiSoporte'].forEach(id => {
+    ['kpiTotal','kpiCuota','kpiPlanillas'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.textContent = '—';
     });

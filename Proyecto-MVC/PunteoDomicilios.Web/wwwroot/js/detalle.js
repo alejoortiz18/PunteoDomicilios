@@ -12,8 +12,9 @@ let modalSoporte       = null;
 let pagDias            = null;
 let pagPanel           = null;
 let consultaController = null;  // AbortController de la consulta activa
-let soportesPaths      = [];    // paths encontrados en el último batch
-let faltantesNrodctos  = [];    // nrodctos sin soporte en el último batch
+let soportesPaths       = [];    // paths encontrados en el último batch
+let soportesNrodctoPath = new Map(); // nrodcto → path para documentos encontrados
+let faltantesNrodctos   = [];    // nrodctos sin soporte en el último batch
 let todosRowItems      = [];    // todos los items del batch activo
 let modoFiltroFaltantes = false;
 
@@ -98,6 +99,7 @@ async function verDia(fecha) {
 
     // Resetear KPI y ZIP de consultas anteriores
     soportesPaths       = [];
+    soportesNrodctoPath = new Map();
     faltantesNrodctos   = [];
     todosRowItems       = [];
     modoFiltroFaltantes = false;
@@ -137,64 +139,86 @@ async function verDia(fecha) {
         pagPanel.setData(rowItems, renderFila);
         tabla.classList.remove('d-none');
 
-        // Progreso
+        // Progreso animado mientras se espera la respuesta del servidor
         progCnt.textContent = `0 / ${nrodctos.length}`;
         progFill.style.width = '0%';
         progBar.classList.remove('d-none');
 
-        // Consultar soporte en paralelo; actualizar paginador reactivamente
-        let done = 0;
-        await Promise.all(nrodctos.map(async (nrodcto, i) => {
-            let estadoHtml = '<span class="tag tag-yellow">⚠ Error API</span>';
-            let accionHtml = '—';
+        // Consultar soportes en lote (1 llamada al servidor en vez de N)
+        let fakeCount = 0;
+        const fakeInterval = setInterval(() => {
+            const inc = Math.ceil(nrodctos.length * 0.02) + Math.floor(Math.random() * 3);
+            fakeCount = Math.min(fakeCount + inc, Math.floor(nrodctos.length * 0.88));
+            progFill.style.width = ((fakeCount / nrodctos.length) * 100) + '%';
+            progCnt.textContent  = `${fakeCount} / ${nrodctos.length}`;
+        }, 400);
 
-            try {
-                const sr      = await fetch(`/api/detalle/soporte?nrodcto=${encodeURIComponent(nrodcto)}`, { signal });
-                const soporte = sr.ok ? await sr.json() : null;
+        try {
+            const batchRes = await fetch('/api/detalle/soporte-batch', {
+                method:  'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body:    JSON.stringify(nrodctos),
+                signal
+            });
 
-                if (!soporte) {
-                    estadoHtml = '<span class="tag tag-yellow">⚠ Error API</span>';
-                    accionHtml = '—';
-                } else if (!soporte.success || !soporte.data || soporte.data.length === 0) {
-                    estadoHtml = '<span class="tag tag-red">❌ Sin soporte</span>';
-                    accionHtml = '—';
-                    faltantesNrodctos.push(nrodcto);
-                } else {
-                    estadoHtml = '<span class="tag tag-green">✅ Encontrado</span>';
-                    const itm   = soporte.data[0];
-                    const path  = itm.storage_Path  ?? '';
-                    const fReg  = itm.fechaRegistro ?? '';
-                    if (path) soportesPaths.push(path);
-                    accionHtml  = path
-                        ? `<button class="btn btn-sm btn-outline-success"
-                                  onclick='verSoporte(${JSON.stringify(nrodcto)}, ${JSON.stringify(fReg)}, ${JSON.stringify(path)})'>
-                               🔍 Ver soporte
-                           </button>`
-                        : '<span class="text-muted small">Sin archivo</span>';
-                }
-            } catch (e) {
-                if (e.name === 'AbortError') return; // consulta cancelada — no actualizar UI
-                // error de red u otro: dejar estado de error por defecto
-            }
-
-            // Si se inició una nueva consulta mientras esta corría, no tocar la UI
+            clearInterval(fakeInterval);
             if (signal.aborted) return;
 
-            const updated = { ...rowItems[i], estadoHtml, accionHtml };
-            rowItems[i]   = updated;
-            pagPanel.updateItem(i, updated);
+            const items = batchRes.ok ? await batchRes.json() : [];
 
-            done++;
-            const pct = Math.round((done / nrodctos.length) * 100);
-            progFill.style.width = pct + '%';
-            progCnt.textContent  = `${done} / ${nrodctos.length}`;
-            if (done === nrodctos.length) {
-                todosRowItems = [...rowItems];
-                setTimeout(() => progBar.classList.add('d-none'), 800);
-                setTimeout(() => actualizarKpi(nrodctos.length, soportesPaths.length), 900);
-                consultaController = null;
-            }
-        }));
+            // Mapa nrodcto → resultado del batch
+            const soporteMap = {};
+            for (const item of items) soporteMap[item.nrodcto] = item;
+
+            // Actualizar cada fila usando el nrodcto como clave (cubre duplicados)
+            rowItems.forEach((row, i) => {
+                const item = soporteMap[row.nrodcto];
+                let estadoHtml = '<span class="tag tag-yellow">⚠ Error API</span>';
+                let accionHtml = '—';
+
+                if (item) {
+                    if (item.estado === 1) { // Encontrado
+                        estadoHtml = '<span class="tag tag-green">✅ Encontrado</span>';
+                        const path = item.storagePath ?? '';
+                        const fReg = item.fechaRegistro ?? '';
+                        if (path && !soportesPaths.includes(path)) soportesPaths.push(path);
+                        if (path) soportesNrodctoPath.set(row.nrodcto, path);
+                        accionHtml = path
+                            ? `<button class="btn btn-sm btn-outline-success"
+                                      onclick='verSoporte(${JSON.stringify(row.nrodcto)}, ${JSON.stringify(fReg)}, ${JSON.stringify(path)})'>
+                                   🔍 Ver soporte
+                               </button>`
+                            : '<span class="text-muted small">Sin archivo</span>';
+                    } else if (item.estado === 2) { // Faltante
+                        estadoHtml = '<span class="tag tag-red">❌ Sin soporte</span>';
+                        if (!faltantesNrodctos.includes(row.nrodcto))
+                            faltantesNrodctos.push(row.nrodcto);
+                    }
+                    // estado 3 (Error): mantiene el yellow tag
+                }
+
+                const updated = { ...row, estadoHtml, accionHtml };
+                rowItems[i]   = updated;
+                pagPanel.updateItem(i, updated);
+            });
+
+            progFill.style.width = '100%';
+            progCnt.textContent  = `${nrodctos.length} / ${nrodctos.length}`;
+            todosRowItems = [...rowItems];
+            setTimeout(() => progBar.classList.add('d-none'), 800);
+            setTimeout(() => actualizarKpi(nrodctos.length, soportesPaths.length), 900);
+            consultaController = null;
+
+        } catch (e) {
+            clearInterval(fakeInterval);
+            if (e.name === 'AbortError') return;
+            console.error('Error en consulta batch:', e);
+            progFill.style.width = '100%';
+            progCnt.textContent  = `0 / ${nrodctos.length}`;
+            setTimeout(() => progBar.classList.add('d-none'), 800);
+            setTimeout(() => actualizarKpi(nrodctos.length, 0), 900);
+            consultaController = null;
+        }
 
     } catch (e) {
         if (e.name === 'AbortError') return; // nueva consulta iniciada — ignorar silenciosamente
@@ -211,6 +235,7 @@ function cerrarPanel() {
     }
     diaActivo           = null;
     soportesPaths       = [];
+    soportesNrodctoPath = new Map();
     faltantesNrodctos   = [];
     todosRowItems       = [];
     modoFiltroFaltantes = false;
@@ -261,8 +286,9 @@ function actualizarKpi(total, encontrados) {
     document.getElementById('kpiTotal').textContent       = total;
     document.getElementById('kpiEncontrados').textContent = encontrados;
     document.getElementById('kpiFaltantes').textContent   = faltantes;
-    document.getElementById('btnDescargarTodos').disabled = encontrados === 0;
-    document.getElementById('btnVerFaltantes').disabled   = faltantes === 0;
+    document.getElementById('btnDescargarTodos').disabled    = encontrados === 0;
+    document.getElementById('btnDescargarPrefijo').disabled  = encontrados === 0;
+    document.getElementById('btnVerFaltantes').disabled      = faltantes === 0;
     document.getElementById('btnDescargarLista').disabled = faltantes === 0;
     document.getElementById('panelKpi').classList.remove('d-none');
 }
@@ -316,18 +342,14 @@ function descargarListaFaltantes() {
     URL.revokeObjectURL(url);
 }
 
-// ── Descargar ZIP ────────────────────────────────────────
-async function descargarTodos() {
-    const paths = [...soportesPaths];
-    if (!paths.length) return;
-
-    const btn       = document.getElementById('btnDescargarTodos');
+// ── Descargar ZIP (helper compartido) ────────────────────────
+async function ejecutarDescargaZip(paths, btnEl, filename) {
     const progBar   = document.getElementById('zipProgreso');
     const progLabel = document.getElementById('zipProgresoLabel');
     const progPct   = document.getElementById('zipProgresoPct');
     const progFill  = document.getElementById('zipProgresoFill');
 
-    btn.disabled = true;
+    btnEl.disabled = true;
     progLabel.textContent = 'Preparando ZIP...';
     progPct.textContent   = '';
     progFill.style.width  = '4%';
@@ -368,19 +390,18 @@ async function descargarTodos() {
             }
         }
 
-        // Guardar archivo
         const blob = new Blob(chunks, { type: 'application/zip' });
         const url  = URL.createObjectURL(blob);
         const a    = document.createElement('a');
         a.href     = url;
-        a.download = `soportes_${diaActivo ?? 'descarga'}.zip`;
+        a.download = filename;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
 
-        progFill.style.width = '100%';
-        progPct.textContent  = '100%';
+        progFill.style.width  = '100%';
+        progPct.textContent   = '100%';
         progLabel.textContent = '✅ Descarga completada';
         setTimeout(() => progBar.classList.add('d-none'), 2500);
 
@@ -389,8 +410,45 @@ async function descargarTodos() {
         mostrarModal('Error', 'Error al descargar el ZIP.', 'error');
         progBar.classList.add('d-none');
     } finally {
-        btn.disabled = false;
+        btnEl.disabled = false;
     }
+}
+
+// ── Descargar todos los soportes encontrados ──────────────────
+async function descargarTodos() {
+    const paths = [...soportesPaths];
+    if (!paths.length) return;
+    const btn = document.getElementById('btnDescargarTodos');
+    await ejecutarDescargaZip(paths, btn, `soportes_${diaActivo ?? 'descarga'}.zip`);
+}
+
+// ── Descargar soportes filtrados por prefijo de NRODCTO ───────
+async function descargarPorPrefijo() {
+    const input   = document.getElementById('inputPrefijo');
+    const prefijo = (input?.value ?? '').trim().toUpperCase();
+
+    if (!prefijo) {
+        mostrarModal('Prefijo requerido', 'Ingresa un prefijo para filtrar los documentos.', 'info');
+        return;
+    }
+
+    const vistos = new Set();
+    const paths  = [];
+    for (const [nrodcto, path] of soportesNrodctoPath) {
+        if (nrodcto.toUpperCase().startsWith(prefijo) && path && !vistos.has(path)) {
+            paths.push(path);
+            vistos.add(path);
+        }
+    }
+
+    if (!paths.length) {
+        mostrarModal('Sin resultados',
+            `No hay documentos encontrados cuyo NRODCTO inicie con "${prefijo}".`, 'info');
+        return;
+    }
+
+    const btn = document.getElementById('btnDescargarPrefijo');
+    await ejecutarDescargaZip(paths, btn, `soportes_${prefijo}_${diaActivo ?? 'descarga'}.zip`);
 }
 
 // ── Helpers ──────────────────────────────────────────────────────

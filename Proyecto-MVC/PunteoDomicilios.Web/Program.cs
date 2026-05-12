@@ -39,6 +39,7 @@ try
     // ── Repositorios y Servicios ──────────────────────────────────────────────
     builder.Services.AddScoped<IMensajeroRepository, MensajeroRepository>();
     builder.Services.AddScoped<IMensajeroService, MensajeroService>();
+    builder.Services.AddSingleton<IDocumentoCacheRepository, SqlDocumentoCacheRepository>();
 
     // ── HttpClient API interna (con retry y timeout) ──────────────────────────
     var apiConfig = builder.Configuration.GetSection("ApiInterna");

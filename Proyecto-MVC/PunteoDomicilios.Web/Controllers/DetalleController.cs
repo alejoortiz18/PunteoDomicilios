@@ -92,6 +92,28 @@ public class DetalleController : Controller
     }
 
     /// <summary>
+    /// Consulta en lote el estado de soporte de múltiples documentos.
+    /// Primero busca en SQL (batch), luego llama al API solo por los faltantes.
+    /// POST /api/detalle/soporte-batch  body: ["KE459191", "KE459192", ...]
+    /// </summary>
+    [HttpPost("/api/detalle/soporte-batch")]
+    public async Task<IActionResult> ConsultarSoporteBatch([FromBody] List<string> nrodctos, CancellationToken ct)
+    {
+        var usuario = HttpContext.Session.GetString(SessionKeys.Usuario);
+        if (string.IsNullOrEmpty(usuario))
+            return Unauthorized(new { error = "Sesión no iniciada." });
+
+        if (nrodctos is null || nrodctos.Count == 0)
+            return BadRequest(new { error = "Lista de nrodctos vacía." });
+
+        if (nrodctos.Any(string.IsNullOrWhiteSpace))
+            return BadRequest(new { error = "La lista contiene valores vacíos." });
+
+        var resultados = await _soporteApiService.ConsultarBatchAsync(nrodctos, ct);
+        return Json(resultados);
+    }
+
+    /// <summary>
     /// Proxy de descarga del PDF. GET /api/detalle/descargar?path=soportes/2026/05/...
     /// </summary>
     [HttpGet("/api/detalle/descargar")]
