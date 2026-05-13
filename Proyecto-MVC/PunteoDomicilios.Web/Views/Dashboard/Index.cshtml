@@ -10,12 +10,12 @@
         <h2 class="section-title">🔍 Consulta por fecha</h2>
     </div>
     <div class="row g-3 align-items-end">
-        <div class="col-md-4">
-            <label class="form-label fw-semibold small">📅 Fecha</label>
+        <div class="col-12 col-md-4">
+            <label class="form-label fw-semibold small">&#128197; Fecha</label>
             <input type="date" id="inputFecha" class="form-control"
                    value="@DateOnly.FromDateTime(DateTime.Today).ToString("yyyy-MM-dd")" />
         </div>
-        <div class="col-md-3">
+        <div class="col-12 col-md-3">
             <button id="btnConsultar" class="btn btn-primary w-100" onclick="iniciarConsulta()">
                 <span id="spinnerConsulta" class="spinner-border spinner-border-sm d-none me-1"></span>
                 🔍 Iniciar Consulta
@@ -49,6 +49,7 @@
         <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>
     </div>
     <div id="resumenTabla" class="d-none">
+        <div class="punteo-table-wrap">
         <table class="punteo-table">
             <thead>
                 <tr>
@@ -60,6 +61,7 @@
             </thead>
             <tbody id="resumenTbody"></tbody>
         </table>
+        </div>
         <div id="pagResumen" class="tabla-footer d-none"></div>
     </div>
     <div id="resumenVacio" class="empty-state d-none">

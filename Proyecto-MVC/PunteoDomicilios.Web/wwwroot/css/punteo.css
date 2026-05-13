@@ -433,16 +433,97 @@ body {
 .login-brand-name { font-size: 1.2rem; font-weight: 700; color: var(--text-main); }
 .login-brand-sub  { font-size: .85rem; color: var(--text-muted); }
 
-/* ── Responsive ──────────────────────────────────────────────── */
-@media (max-width: 900px) {
+/* ── Hamburger / Mobile Nav ─────────────────────────────────── */
+.hamburger-btn {
+  display: none;
+  background: none;
+  border: none;
+  font-size: 1.4rem;
+  cursor: pointer;
+  padding: 6px 8px;
+  color: var(--text-main);
+  border-radius: 6px;
+  line-height: 1;
+  transition: background .15s;
+  flex-shrink: 0;
+}
+.hamburger-btn:hover { background: var(--color-primary-light); }
+
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.45);
+  z-index: 150;
+}
+.sidebar-overlay.visible { display: block; }
+
+/* ── Table wrapper (horizontal scroll on mobile) ────────────── */
+.punteo-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── Responsive: Tablet (≤ 960px) ───────────────────────────── */
+@media (max-width: 960px) {
   .kpi-row    { grid-template-columns: repeat(2, 1fr); }
   .charts-row { grid-template-columns: 1fr; }
 }
 
-@media (max-width: 600px) {
-  .punteo-sidebar { display: none; }
-  .punteo-main    { margin-left: 0; }
-  .kpi-row        { grid-template-columns: 1fr 1fr; }
+/* ── Responsive: Mobile (≤ 768px) ───────────────────────────── */
+@media (max-width: 768px) {
+  /* Show hamburger */
+  .hamburger-btn { display: flex; align-items: center; justify-content: center; }
+
+  /* Sidebar slides in from left as overlay */
+  .punteo-sidebar {
+    transform: translateX(-100%);
+    transition: transform .25s ease;
+    z-index: 200;
+  }
+  .punteo-sidebar.open { transform: translateX(0); }
+
+  /* Main occupies full width */
+  .punteo-main { margin-left: 0; }
+
+  /* Content padding */
+  .punteo-content { padding: 16px; }
+  .section-card   { padding: 14px; }
+
+  /* Tables scroll horizontally */
+  .punteo-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .punteo-table      { min-width: 520px; }
+
+  /* KPI strip stacks vertically */
+  .kpi-strip             { flex-direction: column; }
+  .kpi-strip .kpi-card   { min-width: unset; width: 100%; }
+
+  /* Topbar title */
+  .topbar-title { font-size: .9rem; }
+
+  /* Form rows in SoportesFisicos stack naturally via Bootstrap col-sm */
+}
+
+/* ── Responsive: Small mobile (≤ 480px) ─────────────────────── */
+@media (max-width: 480px) {
+  .punteo-topbar { padding: 0 12px; }
+  .topbar-title  {
+    font-size: .82rem;
+    max-width: 160px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .chip-name     { display: none; }
+
+  .punteo-content { padding: 10px; }
+  .section-card   { padding: 10px; }
+
+  .kpi-row   { grid-template-columns: 1fr; }
+  .kpi-value { font-size: 1.35rem; }
+
+  /* Login card */
+  .login-card { padding: 24px 18px; margin: 12px; max-width: 100%; }
 }
 
 /* ── Pagination ──────────────────────────────────────────────── */
@@ -517,4 +598,5 @@ body {
 
 @media (max-width: 600px) {
   .tabla-footer { justify-content: center; }
+  .pag-btn      { min-width: 28px; height: 28px; font-size: .78rem; }
 }

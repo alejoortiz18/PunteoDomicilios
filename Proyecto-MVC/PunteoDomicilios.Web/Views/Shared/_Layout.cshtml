@@ -56,7 +56,10 @@
 <div class="punteo-main">
     <!-- Topbar -->
     <header class="punteo-topbar">
-        <h1 class="topbar-title">@(ViewData["Title"] ?? "Punteo de Domicilios")</h1>
+        <div class="d-flex align-items-center gap-2">
+            <button class="hamburger-btn" id="sidebarToggle" aria-label="Abrir menú" aria-expanded="false">&#9776;</button>
+            <h1 class="topbar-title">@(ViewData["Title"] ?? "Punteo de Domicilios")</h1>
+        </div>
         @if (!string.IsNullOrEmpty(usuarioActual))
         {
             <a class="topbar-user" asp-controller="Login" asp-action="Index"
@@ -107,6 +110,9 @@
     </div>
 </div>
 
+<!-- ── Sidebar overlay (mobile) ────────────────────────────── -->
+<div class="sidebar-overlay" id="sidebarOverlay" aria-hidden="true"></div>
+
 <script src="~/lib/jquery/dist/jquery.min.js"></script>
 <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
@@ -126,5 +132,31 @@
     }
 </script>
 @await RenderSectionAsync("Scripts", required: false)
+<script>
+    (function () {
+        var toggle  = document.getElementById('sidebarToggle');
+        var sidebar = document.querySelector('.punteo-sidebar');
+        var overlay = document.getElementById('sidebarOverlay');
+        if (!toggle || !sidebar || !overlay) return;
+        function openSidebar() {
+            sidebar.classList.add('open');
+            overlay.classList.add('visible');
+            toggle.setAttribute('aria-expanded', 'true');
+        }
+        function closeSidebar() {
+            sidebar.classList.remove('open');
+            overlay.classList.remove('visible');
+            toggle.setAttribute('aria-expanded', 'false');
+        }
+        toggle.addEventListener('click', function () {
+            sidebar.classList.contains('open') ? closeSidebar() : openSidebar();
+        });
+        overlay.addEventListener('click', closeSidebar);
+        // Close sidebar when a nav link is clicked on mobile
+        sidebar.querySelectorAll('.nav-item').forEach(function (link) {
+            link.addEventListener('click', closeSidebar);
+        });
+    })();
+</script>
 </body>
 </html>
