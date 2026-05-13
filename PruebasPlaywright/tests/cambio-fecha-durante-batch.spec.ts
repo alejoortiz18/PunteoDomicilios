@@ -19,7 +19,7 @@
 
 import { test, expect, type Page, type Route } from '@playwright/test';
 
-const BASE_URL = 'http://localhost:5125';
+const BASE_URL = 'http://localhost:7261';
 const MES_MAYO = '2026-05';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

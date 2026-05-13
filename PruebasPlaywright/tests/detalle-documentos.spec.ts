@@ -18,7 +18,7 @@ import { test, expect, type Page, type BrowserContext, type Browser } from '@pla
 const FECHA_DIA  = '2026-05-11';
 const MES        = '2026-05';
 const PREFIJO_KI = 'Ki';
-const BASE_URL   = 'http://localhost:5125';
+const BASE_URL   = 'http://localhost:7261';
 
 // ── Helper: login ─────────────────────────────────────────────────────────────
 async function loginComoMMUNOZ(page: Page): Promise<void> {

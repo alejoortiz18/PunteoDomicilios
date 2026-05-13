@@ -17,7 +17,7 @@ async function loginComoMMUNOZ(page: Page): Promise<void> {
   await page.goto('/login');
   await page.fill('input[name="usuario"]', 'MMUNOZ');
   await page.click('button[type="submit"]');
-  await page.waitForURL('http://localhost:5125/');
+  await page.waitForURL('http://localhost:7261/');
 }
 
 /** Espera a que el resumen mensual esté cargado y retorna el conteo de filas. */
@@ -295,7 +295,7 @@ test.describe('BD-05 al BD-10 — Botón Ver Soporte: API y URL correcta', () =>
     await expect(page.locator('#modalSoporte')).toBeVisible();
 
     const href = (await page.locator('#modalDescargaLink').getAttribute('href')) ?? '';
-    const urlObj = new URL(href, 'http://localhost:5125');
+    const urlObj = new URL(href, 'http://localhost:7261');
     const pathParam = decodeURIComponent(urlObj.searchParams.get('path') ?? '');
 
     expect(pathParam, 'El parámetro path debe ser idéntico al storage_path de la API').toBe(storagePath);
@@ -383,7 +383,7 @@ test.describe('BD-11 — Flujo E2E completo sin mocks', () => {
     const href = (await page.locator('#modalDescargaLink').getAttribute('href')) ?? '';
     expect(href, '10. El href debe apuntar al proxy de descarga').toContain('/api/detalle/descargar?path=');
 
-    const urlObj = new URL(href, 'http://localhost:5125');
+    const urlObj = new URL(href, 'http://localhost:7261');
     const pathParam = decodeURIComponent(urlObj.searchParams.get('path') ?? '');
 
     expect(pathParam, '10. El parámetro path debe comenzar con soportes/').toMatch(/^soportes\//);

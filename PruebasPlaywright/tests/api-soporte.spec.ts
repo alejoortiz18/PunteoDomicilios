@@ -8,7 +8,7 @@
  *   — Endpoint de batch (/api/detalle/soporte-batch)
  *   — Tiempos de respuesta aceptables (caché vs API directo)
  *
- * Requisito previo: El servidor debe estar corriendo en http://localhost:5125
+ * Requisito previo: El servidor debe estar corriendo en http://localhost:7261
  *   con una sesión iniciada (usuario MMUNOZ), o los endpoints deben responder
  *   con 401 (Unauthorized) que también se valida en AS-07.
  *
@@ -20,7 +20,7 @@
 
 import { test, expect, request as apiContext } from '@playwright/test';
 
-const BASE_URL = 'http://localhost:5125';
+const BASE_URL = 'http://localhost:7261';
 
 // Documentos conocidos del día 2026-05-11 (897 registros del usuario MMUNOZ)
 const NRODCTO_ENCONTRADO = 'K8227073';

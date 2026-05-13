@@ -1,5 +1,5 @@
 using Dapper;
-using Microsoft.Data.SqlClient;
+using System.Data.SqlClient;
 using PunteoDomicilios.Web.DTOs;
 using PunteoDomicilios.Web.Models;
 

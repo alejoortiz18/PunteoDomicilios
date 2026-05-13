@@ -2,7 +2,7 @@
     ViewData["Title"] = "Soportes Físicos";
     Layout = "_Layout";
     var usuario = ViewBag.Usuario as string ?? "";
-    var resultados = ViewBag.Resultados as List<(string Soporte, bool Exito, string Mensaje)>;
+    var resultados = ViewBag.Resultados as List<(string Soporte, string NombreArchivo, bool Exito, string Mensaje)>;
 }
 
 <style>
@@ -170,6 +170,7 @@ input[type="file"].file-real   { display: none; }
                 <tr>
                     <th>#</th>
                     <th>ID Soporte</th>
+                    <th>Nombre del Archivo</th>
                     <th>Estado</th>
                     <th>Mensaje</th>
                 </tr>
@@ -181,6 +182,7 @@ input[type="file"].file-real   { display: none; }
                     <tr>
                         <td class="text-muted small">@(i + 1)</td>
                         <td><code>@r.Soporte</code></td>
+                        <td class="small">@(string.IsNullOrWhiteSpace(r.NombreArchivo) ? "-" : r.NombreArchivo)</td>
                         <td>
                             @if (r.Exito)
                             {

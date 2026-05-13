@@ -3,7 +3,7 @@ import { defineConfig } from '@playwright/test';
 export default defineConfig({
   testDir: './tests',
   use: {
-    baseURL: 'http://localhost:5125',
+    baseURL: 'http://localhost:7261',
     ignoreHTTPSErrors: true,
     browserName: 'chromium',
     headless: false,         // SIEMPRE visible — ver el navegador en vivo

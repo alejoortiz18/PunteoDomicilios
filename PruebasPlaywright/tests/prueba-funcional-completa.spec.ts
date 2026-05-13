@@ -14,7 +14,7 @@
  *
  * Requisito previo — La aplicación debe estar corriendo:
  *   dotnet run --project ../Proyecto-MVC/PunteoDomicilios.Web/PunteoDomicilios.Web.csproj --launch-profile http
- *   → http://localhost:5125
+ *   → http://localhost:7261
  *
  * Ejecutar:
  *   cd PruebasPlaywright
@@ -27,10 +27,10 @@ import { test, expect, type Page } from '@playwright/test';
 import * as path from 'path';
 
 // ────────────────────────────────────────────────────────────────
-// Configuración — apunta siempre a http:5125 (perfil http)
+// Configuración — apunta siempre a http:7261 (perfil http)
 // ────────────────────────────────────────────────────────────────
 test.use({
-  baseURL: 'http://localhost:5125',
+  baseURL: 'http://localhost:7261',
   browserName: 'chromium',
 });
 
@@ -166,15 +166,14 @@ test.describe('L — Login', () => {
     expect(msg).toContain('USUARIO_FALSO_XYZ');
   });
 
-  test('L-05 después del login el sidebar muestra usuario y tres ítems de navegación', async ({ page }) => {
+  test('L-05 después del login el sidebar muestra usuario y navegación principal', async ({ page }) => {
     await loginAs(page);
     await expect(page.locator('.chip-name-sidebar')).toHaveText(USUARIO);
     const navItems = page.locator('.sidebar-nav .nav-item');
-    await expect(navItems).toHaveCount(3);
+    await expect(navItems).toHaveCount(2);
     const textos = await navItems.allTextContents();
     const union = textos.join(' ');
     expect(union).toContain('Dashboard');
-    expect(union).toContain('Detalle mes');
     expect(union).toContain('Soportes');
   });
 
@@ -230,7 +229,7 @@ test.describe('D — Dashboard', () => {
     await expect(page.locator('#areaKpi')).toBeHidden();
   });
 
-  test('D-06 consultar con fecha con datos muestra los cuatro KPIs', async ({ page }) => {
+  test('D-06 consultar con fecha con datos muestra los tres KPIs actuales', async ({ page }) => {
     await page.route(/\/api\/registros/, r => r.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -248,8 +247,8 @@ test.describe('D — Dashboard', () => {
     await page.fill('#inputFecha', FECHA_CON_DATOS);
     await page.click('#btnConsultar');
     await expect(page.locator('#areaKpi')).toBeVisible({ timeout: 10_000 });
-    // Los cuatro KPIs deben tener valores
-    for (const id of ['kpiTotal', 'kpiCuota', 'kpiPlanillas', 'kpiSoporte']) {
+    // Los tres KPIs actuales deben tener valores
+    for (const id of ['kpiTotal', 'kpiCuota', 'kpiPlanillas']) {
       const val = await page.locator(`#${id}`).innerText();
       expect(val.trim()).not.toBe('');
     }

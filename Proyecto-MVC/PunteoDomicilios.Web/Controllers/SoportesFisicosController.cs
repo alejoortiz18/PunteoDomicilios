@@ -46,7 +46,7 @@ public class SoportesFisicosController : Controller
 
         ViewBag.Usuario = usuario;
 
-        var resultados = new List<(string Soporte, bool Exito, string Mensaje)>();
+        var resultados = new List<(string Soporte, string NombreArchivo, bool Exito, string Mensaje)>();
 
         if (modelo.Items is not { Count: > 0 })
         {
@@ -59,23 +59,24 @@ public class SoportesFisicosController : Controller
         {
             // ── Validación básica ────────────────────────────────────────────
             var idSoporte = item.Soporte?.Trim() ?? string.Empty;
+            var nombreArchivo = item.Archivo?.FileName?.Trim() ?? string.Empty;
 
             if (string.IsNullOrEmpty(idSoporte))
             {
-                resultados.Add((idSoporte, false, "ID de soporte vacío"));
+                resultados.Add((idSoporte, nombreArchivo, false, "ID de soporte vacío"));
                 continue;
             }
 
             if (item.Archivo is null || item.Archivo.Length == 0)
             {
-                resultados.Add((idSoporte, false, "Archivo no adjuntado"));
+                resultados.Add((idSoporte, nombreArchivo, false, "Archivo no adjuntado"));
                 continue;
             }
 
             var ext = Path.GetExtension(item.Archivo.FileName).ToLowerInvariant();
             if (!_extensionesPermitidas.Contains(ext))
             {
-                resultados.Add((idSoporte, false, $"Formato no permitido: {ext}. Solo se acepta PDF."));
+                resultados.Add((idSoporte, nombreArchivo, false, $"Formato no permitido: {ext}. Solo se acepta PDF."));
                 continue;
             }
 
@@ -89,7 +90,7 @@ public class SoportesFisicosController : Controller
             catch (Exception ex)
             {
                 _logger.LogError(ex, "ErrorGuardandoTemp | Soporte={Soporte}", idSoporte);
-                resultados.Add((idSoporte, false, "Error guardando archivo temporal"));
+                resultados.Add((idSoporte, nombreArchivo, false, "Error guardando archivo temporal"));
                 continue;
             }
 
@@ -100,7 +101,8 @@ public class SoportesFisicosController : Controller
 
                 if (datos is null)
                 {
-                    resultados.Add((idSoporte, false, $"Error interno al obtener datos: {msnDatos}"));
+                    _logger.LogInformation("SoporteSinDatos | Soporte={Soporte} | Detalle={Detalle}", idSoporte, msnDatos);
+                    resultados.Add((idSoporte, nombreArchivo, false, "No se encontraron soportes para el valor consultado."));
                     continue;
                 }
 
@@ -108,7 +110,7 @@ public class SoportesFisicosController : Controller
                 var (exito, msnFisico) = await _fisico.EnviarAsync(
                     idSoporte, rutaTemp, item.Archivo.FileName, datos, ct);
 
-                resultados.Add((idSoporte, exito, msnFisico));
+                resultados.Add((idSoporte, nombreArchivo, exito, msnFisico));
             }
             finally
             {

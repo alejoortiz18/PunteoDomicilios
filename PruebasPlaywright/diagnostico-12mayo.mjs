@@ -5,7 +5,7 @@
  */
 import { chromium } from './node_modules/playwright/index.mjs';
 
-const BASE_URL   = 'http://localhost:5125';
+const BASE_URL   = 'http://localhost:7261';
 const FECHA      = '2026-05-12';
 const USUARIO    = 'MMUNOZ';
 // Timeout generoso: si el L2 está frío el batch tarda ~10 min
