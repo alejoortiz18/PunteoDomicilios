@@ -182,12 +182,21 @@ public class DetalleController : Controller
 
         var jsonOpts = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
-        await foreach (var resultado in _soporteApiService.ConsultarBatchStreamAsync(nrodctos, ct))
+        try
         {
-            if (ct.IsCancellationRequested) break;
-            var line = JsonSerializer.Serialize(resultado, jsonOpts) + "\n";
-            await Response.WriteAsync(line, Encoding.UTF8, ct);
-            await Response.Body.FlushAsync(ct);
+            await foreach (var resultado in _soporteApiService.ConsultarBatchStreamAsync(nrodctos, ct))
+            {
+                if (ct.IsCancellationRequested) break;
+                var line = JsonSerializer.Serialize(resultado, jsonOpts) + "\n";
+                await Response.WriteAsync(line, Encoding.UTF8, CancellationToken.None);
+                await Response.Body.FlushAsync(CancellationToken.None);
+                if (ct.IsCancellationRequested) break;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // El cliente canceló la petición (cambio de fecha o cierre del panel).
+            // Es comportamiento esperado; se termina el stream silenciosamente.
         }
     }
 

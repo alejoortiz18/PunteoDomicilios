@@ -27,6 +27,37 @@ let batchGeneration    = 0;
 let _progresoTimer1    = null;  // setTimeout para ocultar barra de progreso
 let _progresoTimer2    = null;  // setTimeout para mostrar KPI
 
+// ── Bloqueo UX de botones de fechas ──────────────────────────────────────────
+// Mientras un batch está en proceso se deshabilitan todos los botones
+// «Ver registros →» de la tabla de días para evitar el cambio accidental.
+// El botón de la fecha activa muestra «⏳ Buscando…».
+// Al terminar (o cancelar con Cerrar) se restaura el estado original.
+function bloquearBotonesFechas(fechaActiva) {
+    const btns = document.querySelectorAll('#diasTbody button');
+    btns.forEach(btn => {
+        btn.disabled = true;
+        // Identificar si este botón pertenece a la fila activa
+        const fila = btn.closest('tr');
+        if (fila && fila.id === `fila-${fechaActiva}`) {
+            btn.dataset.textoOriginal = btn.textContent;
+            btn.textContent = '⏳ Buscando…';
+            btn.classList.add('btn-buscando');
+        }
+    });
+}
+
+function desbloquearBotonesFechas() {
+    const btns = document.querySelectorAll('#diasTbody button');
+    btns.forEach(btn => {
+        btn.disabled = false;
+        if (btn.dataset.textoOriginal) {
+            btn.textContent = btn.dataset.textoOriginal;
+            delete btn.dataset.textoOriginal;
+        }
+        btn.classList.remove('btn-buscando');
+    });
+}
+
 // ── Al cargar ─────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
     modalSoporte = new bootstrap.Modal(document.getElementById('modalSoporte'));
@@ -100,6 +131,9 @@ async function verDia(fecha) {
     const myGen = ++batchGeneration;
 
     diaActivo = fecha;
+
+    // Enfoque A: deshabilitar todos los botones de fechas mientras corre el batch
+    bloquearBotonesFechas(fecha);
 
     const panel   = document.getElementById('panelDia');
     const titulo  = document.getElementById('panelDiaTitulo');
@@ -188,6 +222,8 @@ async function verDia(fecha) {
             _progresoTimer1 = setTimeout(() => { _progresoTimer1 = null; progBar.classList.add('d-none'); }, 800);
             _progresoTimer2 = setTimeout(() => { _progresoTimer2 = null; actualizarKpi(nrodctos.length, soportesPaths.length); }, 900);
             consultaController = null;
+            // Enfoque A: rehabilitar botones en caso de error de API
+            desbloquearBotonesFechas();
             return;
         }
 
@@ -247,11 +283,15 @@ async function verDia(fecha) {
         _progresoTimer1 = setTimeout(() => { _progresoTimer1 = null; progBar.classList.add('d-none'); }, 800);
         _progresoTimer2 = setTimeout(() => { _progresoTimer2 = null; actualizarKpi(nrodctos.length, soportesPaths.length); }, 900);
         consultaController = null;
+        // Enfoque A: rehabilitar botones al terminar el batch
+        desbloquearBotonesFechas();
 
     } catch (e) {
         if (e.name === 'AbortError') return; // nueva consulta iniciada — ignorar silenciosamente
         console.error(e);
         loading.classList.add('d-none');
+        // Rehabilitar botones aunque haya error
+        desbloquearBotonesFechas();
         mostrarModal('Error inesperado', 'Error inesperado al consultar los registros.', 'error');
     }
 }
@@ -299,6 +339,9 @@ function cerrarPanel() {
         descargaController.abort();
         descargaController = null;
     }
+    // Cancelar timers pendientes para que no interfieran tras cerrar
+    if (_progresoTimer1 !== null) { clearTimeout(_progresoTimer1); _progresoTimer1 = null; }
+    if (_progresoTimer2 !== null) { clearTimeout(_progresoTimer2); _progresoTimer2 = null; }
     diaActivo           = null;
     soportesPaths       = [];
     soportesNrodctoPath = new Map();
@@ -308,6 +351,8 @@ function cerrarPanel() {
     document.getElementById('panelDia').classList.add('d-none');
     document.getElementById('panelKpi').classList.add('d-none');
     document.getElementById('zipProgreso').classList.add('d-none');
+    // Enfoque A: rehabilitar siempre los botones de fechas al cerrar
+    desbloquearBotonesFechas();
 }
 
 // ── Modal Soporte ──────────────────────────────────────────────
