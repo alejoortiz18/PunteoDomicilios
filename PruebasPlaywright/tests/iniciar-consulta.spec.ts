@@ -127,25 +127,26 @@ test.describe('Dashboard — Botón Iniciar Consulta', () => {
     const planillas = parseInt(kpiPlanillas.replace(/\D/g, ''));
     expect(planillas, 'Planillas Distintas debe ser ≥ 1').toBeGreaterThanOrEqual(1);
 
-    // KPI Mensajeros: número ≥ 0 (puede ser 0 si registros no tienen mensajero asignado)
-    const kpiSoporte = await page.locator('#kpiSoporte').innerText();
-    const mensajeros = parseInt(kpiSoporte.replace(/\D/g, ''));
-    expect(isNaN(mensajeros), 'Mensajeros debe ser un número válido').toBe(false);
-    expect(mensajeros, 'Mensajeros debe ser ≥ 0').toBeGreaterThanOrEqual(0);
+    // Los 3 KPIs existen y tienen valores no vacíos
+    await expect(page.locator('#kpiTotal'), 'kpiTotal debe estar visible').toBeVisible();
+    await expect(page.locator('#kpiCuota'), 'kpiCuota debe estar visible').toBeVisible();
+    await expect(page.locator('#kpiPlanillas'), 'kpiPlanillas debe estar visible').toBeVisible();
   });
 
   // ── DC-05 ────────────────────────────────────────────────────────────────
-  test('DC-05 el gráfico timeline aparece tras la consulta', async ({ page }) => {
+  test('DC-05 el área de KPIs aparece tras la consulta', async ({ page }) => {
     await seleccionarFechaYConsultar(page, FECHA_CON_DATOS);
 
     // Esperar a que finalice la consulta
     await expect(page.locator('#btnConsultar')).toBeEnabled({ timeout: 30_000 });
 
-    // El área de gráficos debe ser visible
-    await expect(page.locator('#areaCharts'), 'El área de gráficos debe aparecer').toBeVisible();
+    // El área de KPIs debe ser visible (es la única sección de resultados en el Dashboard)
+    await expect(page.locator('#areaKpi'), 'El área de KPIs debe aparecer').toBeVisible();
 
-    // El canvas de timeline debe existir y estar visible
-    await expect(page.locator('#chartTimeline'), 'El gráfico de timeline debe existir').toBeVisible();
+    // Los 3 KPI cards deben existir y estar visibles
+    await expect(page.locator('#kpiTotal'), 'kpiTotal debe existir').toBeVisible();
+    await expect(page.locator('#kpiCuota'), 'kpiCuota debe existir').toBeVisible();
+    await expect(page.locator('#kpiPlanillas'), 'kpiPlanillas debe existir').toBeVisible();
   });
 
   // ── DC-06 ────────────────────────────────────────────────────────────────
@@ -154,7 +155,7 @@ test.describe('Dashboard — Botón Iniciar Consulta', () => {
     await expect(page.locator('#btnConsultar')).toBeEnabled({ timeout: 30_000 });
 
     // Todos los KPIs deben tener valores (no "—")
-    for (const id of ['kpiTotal', 'kpiCuota', 'kpiPlanillas', 'kpiSoporte']) {
+    for (const id of ['kpiTotal', 'kpiCuota', 'kpiPlanillas']) {
       const txt = await page.locator(`#${id}`).innerText();
       expect(txt.trim(), `${id} no debe mostrar el valor inicial "—"`).not.toBe('—');
       expect(txt.trim(), `${id} no debe estar vacío`).not.toBe('');
@@ -179,9 +180,8 @@ test.describe('Dashboard — Botón Iniciar Consulta', () => {
     const titulo = await page.locator('#modalMensajeTitulo').innerText();
     expect(titulo.trim(), 'El título debe indicar sin resultados').not.toBe('');
 
-    // KPIs y gráficos NO deben aparecer
+    // KPIs NO deben aparecer
     await expect(page.locator('#areaKpi'), 'Los KPIs no deben mostrarse').toBeHidden();
-    await expect(page.locator('#areaCharts'), 'Los gráficos no deben mostrarse').toBeHidden();
   });
 
   // ── DC-08 ────────────────────────────────────────────────────────────────
@@ -294,17 +294,14 @@ test.describe('Dashboard — Botón Iniciar Consulta', () => {
     const kpiTotal = parseInt((await page.locator('#kpiTotal').innerText()).replace(/\D/g, ''));
     expect(kpiTotal, '6. Total Registros debe ser > 0').toBeGreaterThan(0);
 
-    const kpiSoporte = await page.locator('#kpiSoporte').innerText();
-    const mensajeros = parseInt(kpiSoporte.replace(/\D/g, ''));
-    expect(isNaN(mensajeros), '6. Mensajeros debe ser un número válido').toBe(false);
-    expect(mensajeros, '6. Mensajeros debe ser ≥ 0').toBeGreaterThanOrEqual(0);
+    const kpiCuota = await page.locator('#kpiCuota').innerText();
+    expect(kpiCuota, '6. Cuota Mod debe contener $').toContain('$');
 
-    // 7. Gráfico timeline visible
-    await expect(page.locator('#areaCharts'), '7. Los gráficos deben ser visibles').toBeVisible();
-    await expect(page.locator('#chartTimeline'), '7. Timeline debe existir').toBeVisible();
+    const kpiPlanillas = parseInt((await page.locator('#kpiPlanillas').innerText()).replace(/\D/g, ''));
+    expect(kpiPlanillas, '6. Planillas debe ser ≥ 1').toBeGreaterThanOrEqual(1);
 
-    // 8. Sin errores de consola
-    expect(errores, '8. No debe haber errores en consola').toEqual([]);
+    // 7. Sin errores de consola
+    expect(errores, '7. No debe haber errores en consola').toEqual([]);
   });
 
 });

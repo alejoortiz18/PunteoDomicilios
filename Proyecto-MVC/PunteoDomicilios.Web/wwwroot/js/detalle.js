@@ -12,11 +12,20 @@ let modalSoporte       = null;
 let pagDias            = null;
 let pagPanel           = null;
 let consultaController = null;  // AbortController de la consulta activa
+let descargaController = null;  // AbortController de la descarga ZIP activa
 let soportesPaths       = [];    // paths encontrados en el último batch
 let soportesNrodctoPath = new Map(); // nrodcto → path para documentos encontrados
 let faltantesNrodctos   = [];    // nrodctos sin soporte en el último batch
 let todosRowItems      = [];    // todos los items del batch activo
 let modoFiltroFaltantes = false;
+
+// ── Control de concurrencia: evita que un batch anterior actualice la UI ──────
+// Cada llamada a verDia() incrementa este contador y guarda su propio valor.
+// Cualquier operación asincrónica del batch anterior detecta que ya no es
+// el batch vigente y sale sin tocar el DOM.
+let batchGeneration    = 0;
+let _progresoTimer1    = null;  // setTimeout para ocultar barra de progreso
+let _progresoTimer2    = null;  // setTimeout para mostrar KPI
 
 // ── Al cargar ─────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
@@ -77,9 +86,18 @@ async function verDia(fecha) {
     if (consultaController) {
         consultaController.abort();
     }
+    // Cancelar timers pendientes del lote anterior (barra y KPI)
+    if (_progresoTimer1 !== null) { clearTimeout(_progresoTimer1); _progresoTimer1 = null; }
+    if (_progresoTimer2 !== null) { clearTimeout(_progresoTimer2); _progresoTimer2 = null; }
+
     const controller = new AbortController();
     consultaController = controller;
     const signal = controller.signal;
+
+    // Capturar la generación de ESTE batch. Si otro verDia() se llama antes de
+    // que este termine, batchGeneration habrá incrementado y todas las
+    // operaciones asincrónicas de este batch saldrán silenciosamente.
+    const myGen = ++batchGeneration;
 
     diaActivo = fecha;
 
@@ -139,86 +157,96 @@ async function verDia(fecha) {
         pagPanel.setData(rowItems, renderFila);
         tabla.classList.remove('d-none');
 
-        // Progreso animado mientras se espera la respuesta del servidor
         progCnt.textContent = `0 / ${nrodctos.length}`;
         progFill.style.width = '0%';
         progBar.classList.remove('d-none');
 
-        // Consultar soportes en lote (1 llamada al servidor en vez de N)
-        let fakeCount = 0;
-        const fakeInterval = setInterval(() => {
-            const inc = Math.ceil(nrodctos.length * 0.02) + Math.floor(Math.random() * 3);
-            fakeCount = Math.min(fakeCount + inc, Math.floor(nrodctos.length * 0.88));
-            progFill.style.width = ((fakeCount / nrodctos.length) * 100) + '%';
-            progCnt.textContent  = `${fakeCount} / ${nrodctos.length}`;
-        }, 400);
+        // ── Batch streaming: cada resultado llega conforme el servidor lo resuelve ─────
+        const soporteMap = {};
+        let procesados    = 0;
+
+        const streamRes = await fetch('/api/detalle/soporte-batch-stream', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify(nrodctos),
+            signal
+        });
+        if (signal.aborted) return;
+
+        if (!streamRes.ok) {
+            // Race condition fix: verificar que este batch sigue siendo el activo
+            if (batchGeneration !== myGen) return;
+            // Marcar como error todas las filas
+            rowItems.forEach((row, i) => {
+                rowItems[i] = { ...row,
+                    estadoHtml: '<span class="tag tag-yellow">⚠ Error API</span>',
+                    accionHtml: '—'
+                };
+                pagPanel.updateItem(i, rowItems[i]);
+            });
+            progFill.style.width = '100%';
+            _progresoTimer1 = setTimeout(() => { _progresoTimer1 = null; progBar.classList.add('d-none'); }, 800);
+            _progresoTimer2 = setTimeout(() => { _progresoTimer2 = null; actualizarKpi(nrodctos.length, soportesPaths.length); }, 900);
+            consultaController = null;
+            return;
+        }
+
+        const reader  = streamRes.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer    = '';
+
+        // Mapa nrodcto → índices de filas (puede haber duplicados en los registros)
+        const rowIndexMap = new Map();
+        rowItems.forEach((row, i) => {
+            if (!rowIndexMap.has(row.nrodcto)) rowIndexMap.set(row.nrodcto, []);
+            rowIndexMap.get(row.nrodcto).push(i);
+        });
 
         try {
-            const batchRes = await fetch('/api/detalle/soporte-batch', {
-                method:  'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body:    JSON.stringify(nrodctos),
-                signal
-            });
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                if (signal.aborted) { reader.cancel(); return; }
 
-            clearInterval(fakeInterval);
-            if (signal.aborted) return;
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop(); // última línea incompleta queda en buffer
 
-            const items = batchRes.ok ? await batchRes.json() : [];
+                for (const line of lines) {
+                    // Race condition fix: si se seleccionó otra fecha, salir
+                    if (batchGeneration !== myGen) { reader.cancel(); return; }
+                    if (!line.trim()) continue;
+                    let item;
+                    try { item = JSON.parse(line); } catch { continue; }
 
-            // Mapa nrodcto → resultado del batch
-            const soporteMap = {};
-            for (const item of items) soporteMap[item.nrodcto] = item;
+                    soporteMap[item.nrodcto] = item;
+                    procesados++;
 
-            // Actualizar cada fila usando el nrodcto como clave (cubre duplicados)
-            rowItems.forEach((row, i) => {
-                const item = soporteMap[row.nrodcto];
-                let estadoHtml = '<span class="tag tag-yellow">⚠ Error API</span>';
-                let accionHtml = '—';
-
-                if (item) {
-                    if (item.estado === 1) { // Encontrado
-                        estadoHtml = '<span class="tag tag-green">✅ Encontrado</span>';
-                        const path = item.storagePath ?? '';
-                        const fReg = item.fechaRegistro ?? '';
-                        if (path && !soportesPaths.includes(path)) soportesPaths.push(path);
-                        if (path) soportesNrodctoPath.set(row.nrodcto, path);
-                        accionHtml = path
-                            ? `<button class="btn btn-sm btn-outline-success"
-                                      onclick='verSoporte(${JSON.stringify(row.nrodcto)}, ${JSON.stringify(fReg)}, ${JSON.stringify(path)})'>
-                                   🔍 Ver soporte
-                               </button>`
-                            : '<span class="text-muted small">Sin archivo</span>';
-                    } else if (item.estado === 2) { // Faltante
-                        estadoHtml = '<span class="tag tag-red">❌ Sin soporte</span>';
-                        if (!faltantesNrodctos.includes(row.nrodcto))
-                            faltantesNrodctos.push(row.nrodcto);
+                    const indices = rowIndexMap.get(item.nrodcto) ?? [];
+                    for (const i of indices) {
+                        const { estadoHtml, accionHtml } = procesarEstadoItem(rowItems[i], item);
+                        rowItems[i] = { ...rowItems[i], estadoHtml, accionHtml };
+                        pagPanel.updateItem(i, rowItems[i]);
                     }
-                    // estado 3 (Error): mantiene el yellow tag
+
+                    progCnt.textContent = `${procesados} / ${nrodctos.length}`;
+                    progFill.style.width = ((procesados / nrodctos.length) * 100) + '%';
                 }
-
-                const updated = { ...row, estadoHtml, accionHtml };
-                rowItems[i]   = updated;
-                pagPanel.updateItem(i, updated);
-            });
-
-            progFill.style.width = '100%';
-            progCnt.textContent  = `${nrodctos.length} / ${nrodctos.length}`;
-            todosRowItems = [...rowItems];
-            setTimeout(() => progBar.classList.add('d-none'), 800);
-            setTimeout(() => actualizarKpi(nrodctos.length, soportesPaths.length), 900);
-            consultaController = null;
-
+            }
         } catch (e) {
-            clearInterval(fakeInterval);
             if (e.name === 'AbortError') return;
-            console.error('Error en consulta batch:', e);
-            progFill.style.width = '100%';
-            progCnt.textContent  = `0 / ${nrodctos.length}`;
-            setTimeout(() => progBar.classList.add('d-none'), 800);
-            setTimeout(() => actualizarKpi(nrodctos.length, 0), 900);
-            consultaController = null;
+            console.error('Error leyendo stream de soportes:', e);
         }
+
+        // Race condition fix: solo limpiar UI si este batch sigue siendo el activo
+        if (batchGeneration !== myGen) return;
+
+        progFill.style.width = '100%';
+        progCnt.textContent  = `${nrodctos.length} / ${nrodctos.length}`;
+        todosRowItems = [...rowItems];
+        _progresoTimer1 = setTimeout(() => { _progresoTimer1 = null; progBar.classList.add('d-none'); }, 800);
+        _progresoTimer2 = setTimeout(() => { _progresoTimer2 = null; actualizarKpi(nrodctos.length, soportesPaths.length); }, 900);
+        consultaController = null;
 
     } catch (e) {
         if (e.name === 'AbortError') return; // nueva consulta iniciada — ignorar silenciosamente
@@ -228,10 +256,48 @@ async function verDia(fecha) {
     }
 }
 
+// ── Helper: convierte un NrodctoEstadoDto en los HTML de estado y acción ─────
+function procesarEstadoItem(row, item) {
+    if (!item || item.estado === 3) {
+        return {
+            estadoHtml: '<span class="tag tag-yellow">⚠ Error API</span>',
+            accionHtml: '—'
+        };
+    }
+    if (item.estado === 1) { // Encontrado
+        const path = item.storagePath ?? '';
+        const fReg = item.fechaRegistro ?? '';
+        if (path && !soportesPaths.includes(path)) soportesPaths.push(path);
+        if (path) soportesNrodctoPath.set(row.nrodcto, path);
+        return {
+            estadoHtml: '<span class="tag tag-green">✅ Encontrado</span>',
+            accionHtml: path
+                ? `<button class="btn btn-sm btn-outline-success"
+                          onclick='verSoporte(${JSON.stringify(row.nrodcto)}, ${JSON.stringify(fReg)}, ${JSON.stringify(path)})'>
+                       🔍 Ver soporte
+                   </button>`
+                : '<span class="text-muted small">Sin archivo</span>'
+        };
+    }
+    if (item.estado === 2) { // Faltante
+        if (!faltantesNrodctos.includes(row.nrodcto))
+            faltantesNrodctos.push(row.nrodcto);
+        return {
+            estadoHtml: '<span class="tag tag-red">❌ Sin soporte</span>',
+            accionHtml: '—'
+        };
+    }
+    return { estadoHtml: '<span class="tag tag-yellow">⚠ Error API</span>', accionHtml: '—' };
+}
+
 function cerrarPanel() {
     if (consultaController) {
         consultaController.abort();
         consultaController = null;
+    }
+    if (descargaController) {
+        descargaController.abort();
+        descargaController = null;
     }
     diaActivo           = null;
     soportesPaths       = [];
@@ -349,17 +415,27 @@ async function ejecutarDescargaZip(paths, btnEl, filename) {
     const progPct   = document.getElementById('zipProgresoPct');
     const progFill  = document.getElementById('zipProgresoFill');
 
-    btnEl.disabled = true;
+    // Deshabilitar todos los controles de descarga mientras corre este proceso
+    const btnTodos   = document.getElementById('btnDescargarTodos');
+    const btnPrefijo = document.getElementById('btnDescargarPrefijo');
+    const inputPref  = document.getElementById('inputPrefijo');
+    btnTodos.disabled   = true;
+    btnPrefijo.disabled = true;
+    inputPref.disabled  = true;
+
     progLabel.textContent = 'Preparando ZIP...';
     progPct.textContent   = '';
     progFill.style.width  = '4%';
     progBar.classList.remove('d-none');
 
+    descargaController = new AbortController();
+
     try {
         const resp = await fetch('/api/detalle/descargar-zip', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(paths)
+            body: JSON.stringify(paths),
+            signal: descargaController.signal
         });
 
         if (!resp.ok) {
@@ -406,11 +482,20 @@ async function ejecutarDescargaZip(paths, btnEl, filename) {
         setTimeout(() => progBar.classList.add('d-none'), 2500);
 
     } catch (e) {
-        console.error(e);
-        mostrarModal('Error', 'Error al descargar el ZIP.', 'error');
+        if (e.name === 'AbortError') {
+            // Cancelado por el usuario al cerrar el panel — no mostrar modal de error
+            console.info('Descarga ZIP cancelada por el usuario.');
+        } else {
+            console.error(e);
+            mostrarModal('Error', 'Error al descargar el ZIP.', 'error');
+        }
         progBar.classList.add('d-none');
     } finally {
-        btnEl.disabled = false;
+        descargaController = null;
+        // Rehabilitar todos los controles de descarga al terminar (o si hubo error/cancelación)
+        btnTodos.disabled   = false;
+        btnPrefijo.disabled = false;
+        inputPref.disabled  = false;
     }
 }
 

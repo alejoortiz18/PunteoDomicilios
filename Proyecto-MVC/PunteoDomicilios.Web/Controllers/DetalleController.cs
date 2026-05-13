@@ -1,4 +1,6 @@
 using System.IO.Compression;
+using System.Text;
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using PunteoDomicilios.Web.Services;
 
@@ -128,6 +130,65 @@ public class DetalleController : Controller
 
         var fileName = Path.GetFileName(path);
         return File(stream, "application/pdf", fileName);
+    }
+
+    /// <summary>
+    /// Fase 1 del batch: retorna solo los nrodctos ya en caché (DocumentosIndexados + L1).
+    /// No llama al API externo. Muy rápido (~100ms).
+    /// POST /api/detalle/soporte-precalentado  body: ["KE459191", ...]
+    /// </summary>
+    [HttpPost("/api/detalle/soporte-precalentado")]
+    public async Task<IActionResult> ConsultarSoportePrecalentado(
+        [FromBody] List<string> nrodctos, CancellationToken ct)
+    {
+        var usuario = HttpContext.Session.GetString(SessionKeys.Usuario);
+        if (string.IsNullOrEmpty(usuario))
+            return Unauthorized(new { error = "Sesión no iniciada." });
+
+        if (nrodctos is null || nrodctos.Count == 0)
+            return BadRequest(new { error = "Lista de nrodctos vacía." });
+
+        var resultados = await _soporteApiService.ConsultarDesdeCacheAsync(nrodctos, ct);
+        return Json(resultados);
+    }
+
+    /// <summary>
+    /// Streaming batch: emite un resultado NDJSON por cada nrodcto conforme se resuelve.
+    /// Cache hits llegan en ms; llamadas al API externo llegan conforme completan (~3s c/u).
+    /// POST /api/detalle/soporte-batch-stream  body: ["KE459191", ...]
+    /// </summary>
+    [HttpPost("/api/detalle/soporte-batch-stream")]
+    public async Task StreamSoporteBatch([FromBody] List<string> nrodctos, CancellationToken ct)
+    {
+        var usuario = HttpContext.Session.GetString(SessionKeys.Usuario);
+        if (string.IsNullOrEmpty(usuario))
+        {
+            Response.StatusCode = 401;
+            return;
+        }
+
+        if (nrodctos is null || nrodctos.Count == 0)
+        {
+            Response.StatusCode = 400;
+            return;
+        }
+
+        Response.ContentType = "application/x-ndjson; charset=utf-8";
+
+        // Deshabilitar buffering de respuesta para que cada línea llegue de inmediato
+        var bufferingFeature = Response.HttpContext.Features
+            .Get<Microsoft.AspNetCore.Http.Features.IHttpResponseBodyFeature>();
+        bufferingFeature?.DisableBuffering();
+
+        var jsonOpts = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+
+        await foreach (var resultado in _soporteApiService.ConsultarBatchStreamAsync(nrodctos, ct))
+        {
+            if (ct.IsCancellationRequested) break;
+            var line = JsonSerializer.Serialize(resultado, jsonOpts) + "\n";
+            await Response.WriteAsync(line, Encoding.UTF8, ct);
+            await Response.Body.FlushAsync(ct);
+        }
     }
 
     /// <summary>

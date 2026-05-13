@@ -1,6 +1,8 @@
 using System.Collections.Concurrent;
 using System.Net.Http.Json;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
+using System.Threading.Channels;
 using Microsoft.Extensions.Caching.Memory;
 using PunteoDomicilios.Web.DTOs;
 using PunteoDomicilios.Web.Models;
@@ -272,5 +274,135 @@ public class SoporteApiService : ISoporteApiService
         });
 
         return resultados;
+    }
+
+    public async Task<IEnumerable<NrodctoEstadoDto>> ConsultarDesdeCacheAsync(
+        IEnumerable<string> nrodctos, CancellationToken ct = default)
+    {
+        var lista = nrodctos.Select(n => n.Trim()).Distinct().ToList();
+        var resultados = new List<NrodctoEstadoDto>();
+
+        if (!_cacheLocalHabilitado || lista.Count == 0)
+            return resultados;
+
+        try
+        {
+            var sqlHits = await _cacheRepo.ObtenerBatchAsync(lista, ct);
+            foreach (var (nrodcto, item) in sqlHits)
+            {
+                var key = $"soporte:{nrodcto}";
+                NrodctoEstadoDto estado;
+                if (item.Storage_Path == SqlDocumentoCacheRepository.FALTANTE_SENTINEL)
+                {
+                    estado = new(nrodcto, EstadoSoporte.Faltante, null, null, null, "Sin soporte");
+                    _cache.Set(key, new SoporteApiResponse(false, "Sin soporte", null),
+                        TimeSpan.FromMinutes(_cacheMinutes));
+                }
+                else
+                {
+                    estado = new(nrodcto, EstadoSoporte.Encontrado,
+                        item.FechaRegistro, item.Storage_Disk, item.Storage_Path, null);
+                    _cache.Set(key, new SoporteApiResponse(true, null, [item]),
+                        TimeSpan.FromMinutes(_cacheMinutes));
+                }
+                resultados.Add(estado);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "ConsultarDesdeCacheAsync: acceso a caché L2 falló");
+        }
+
+        return resultados;
+    }
+
+    public async IAsyncEnumerable<NrodctoEstadoDto> ConsultarBatchStreamAsync(
+        IEnumerable<string> nrodctos,
+        [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        var lista = nrodctos.Select(n => n.Trim()).Distinct().ToList();
+        if (lista.Count == 0) yield break;
+
+        var channel = Channel.CreateUnbounded<NrodctoEstadoDto>(
+            new UnboundedChannelOptions { SingleWriter = false, SingleReader = true });
+
+        // Pre-calentar L2: un solo query SQL para cargar caché L1 antes del paralelo
+        if (_cacheLocalHabilitado)
+        {
+            try
+            {
+                var sqlHits = await _cacheRepo.ObtenerBatchAsync(lista, CancellationToken.None);
+                int enc = 0, falt = 0;
+                foreach (var (nrodcto, item) in sqlHits)
+                {
+                    var key = $"soporte:{nrodcto}";
+                    if (_cache.TryGetValue(key, out _)) continue;
+                    if (item.Storage_Path == SqlDocumentoCacheRepository.FALTANTE_SENTINEL)
+                    {
+                        _cache.Set(key, new SoporteApiResponse(false, "Sin soporte", null),
+                            TimeSpan.FromMinutes(_cacheMinutes));
+                        falt++;
+                    }
+                    else
+                    {
+                        _cache.Set(key, new SoporteApiResponse(true, null, [item]),
+                            TimeSpan.FromMinutes(_cacheMinutes));
+                        enc++;
+                    }
+                }
+                _logger.LogDebug("Stream pre-calentamiento L2: {Enc} encontrados + {Falt} faltantes / {Total} total",
+                    enc, falt, lista.Count);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Stream: pre-calentamiento L2 falló, se consultará API directo");
+            }
+        }
+
+        // Procesar en paralelo; cada resultado se escribe al channel en cuanto resuelve
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Parallel.ForEachAsync(lista, CancellationToken.None, async (nrodcto, _) =>
+                {
+                    NrodctoEstadoDto estado;
+                    try
+                    {
+                        var resp = await ConsultarAsync(nrodcto, CancellationToken.None);
+                        estado = BuildEstadoDto(nrodcto, resp);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Error en stream para {Nrodcto}", nrodcto);
+                        estado = new(nrodcto, EstadoSoporte.Error, null, null, null, "Error interno");
+                    }
+                    await channel.Writer.WriteAsync(estado, CancellationToken.None);
+                });
+            }
+            finally
+            {
+                channel.Writer.Complete();
+            }
+        }, CancellationToken.None);
+
+        await foreach (var item in channel.Reader.ReadAllAsync(ct))
+            yield return item;
+    }
+
+    // Helper: convierte SoporteApiResponse? en NrodctoEstadoDto
+    private static NrodctoEstadoDto BuildEstadoDto(string nrodcto, SoporteApiResponse? resp)
+    {
+        if (resp is null)
+            return new(nrodcto, EstadoSoporte.Error, null, null, null, "Sin respuesta de API");
+
+        if (resp.Success && resp.Data is { Count: > 0 })
+        {
+            var d = resp.Data[0];
+            return new(nrodcto, EstadoSoporte.Encontrado,
+                d.FechaRegistro, d.Storage_Disk, d.Storage_Path, null);
+        }
+
+        return new(nrodcto, EstadoSoporte.Faltante, null, null, null, resp.Message);
     }
 }

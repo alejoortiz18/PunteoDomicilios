@@ -45,7 +45,8 @@ const MOCK_REGISTROS = JSON.stringify({
   nrodctos: [NRODCTO_EJEMPLO],
 });
 
-const MOCK_SOPORTE = JSON.stringify({
+// Mock para /api/detalle/soporte (individual — VS-01/VS-02 usan la API real)
+const MOCK_SOPORTE_INDIVIDUAL = JSON.stringify({
   success: true,
   message: 'Soportes consultados correctamente.',
   data: [
@@ -56,6 +57,16 @@ const MOCK_SOPORTE = JSON.stringify({
     },
   ],
 });
+
+// Mock para /api/detalle/soporte-batch — formato array que espera el frontend
+const MOCK_SOPORTE_BATCH = JSON.stringify([
+  {
+    nrodcto: NRODCTO_EJEMPLO,
+    estado: 1,           // 1 = Encontrado
+    storagePath: STORAGE_PATH_REAL,
+    fechaRegistro: '2026-05-04 14:37:01',
+  },
+]);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 async function loginComoMMUNOZ(page: Page): Promise<void> {
@@ -78,8 +89,14 @@ async function mockDetalleEndpoints(page: Page): Promise<void> {
   await page.route(/\/api\/detalle\/registros/, route =>
     route.fulfill({ status: 200, contentType: 'application/json', body: MOCK_REGISTROS })
   );
-  await page.route(/\/api\/detalle\/soporte/, route =>
-    route.fulfill({ status: 200, contentType: 'application/json', body: MOCK_SOPORTE })
+  // Soporte individual registrado PRIMERO (menor prioridad LIFO). Usa \? para no
+  // capturar soporte-batch. El endpoint real siempre lleva ?nrodcto=...
+  await page.route(/\/api\/detalle\/soporte\?/, route =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: MOCK_SOPORTE_INDIVIDUAL })
+  );
+  // Soporte-batch registrado ÚLTIMO (mayor prioridad LIFO) — formato array
+  await page.route(/\/api\/detalle\/soporte-batch/, route =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: MOCK_SOPORTE_BATCH })
   );
 }
 
