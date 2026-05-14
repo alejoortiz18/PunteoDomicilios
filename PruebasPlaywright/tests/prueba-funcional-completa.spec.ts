@@ -94,7 +94,30 @@ async function mockDetalleEndpoints(page: Page): Promise<void> {
   await page.route(/\/api\/detalle\/registros/, r =>
     r.fulfill({ status: 200, contentType: 'application/json', body: MOCK_REGISTROS }));
 
-  await page.route(/\/api\/detalle\/soporte/, (route, request) => {
+  await page.route(/\/api\/detalle\/soporte-batch-stream/, async route => {
+    const lines = [
+      JSON.stringify({
+        nrodcto: NRODCTO,
+        estado: 1,
+        fechaRegistro: '2026-05-04 14:37:01',
+        storagePath: STORAGE_PATH,
+      }),
+      JSON.stringify({
+        nrodcto: 'SIN001',
+        estado: 2,
+        fechaRegistro: null,
+        storagePath: null,
+      }),
+    ].join('\n') + '\n';
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/x-ndjson',
+      body: lines,
+    });
+  });
+
+  await page.route(/\/api\/detalle\/soporte(?:\?|$)/, (route, request) => {
     const url = request.url();
     const body = url.includes(`nrodcto=${encodeURIComponent(NRODCTO)}`)
       ? MOCK_SOPORTE_OK
@@ -439,6 +462,17 @@ test.describe('DT — Detalle mes', () => {
       page.locator('#btnDescargarLista').click(),
     ]);
     expect(download.suggestedFilename()).toMatch(/\.csv$/i);
+  });
+
+  test('DT-13b el botón "Descargar Lista" de encontrados genera un CSV', async ({ page }) => {
+    await abrirPrimerPanel(page);
+    await esperarKpi(page);
+    await expect(page.locator('#btnDescargarListaEncontrados')).toBeEnabled({ timeout: 10_000 });
+    const [download] = await Promise.all([
+      page.waitForEvent('download', { timeout: 10_000 }),
+      page.locator('#btnDescargarListaEncontrados').click(),
+    ]);
+    expect(download.suggestedFilename()).toMatch(/^encontrados_.*\.csv$/i);
   });
 
   test('DT-14 el botón "Descargar todos" inicia la descarga del ZIP (mock endpoint)', async ({ page }) => {

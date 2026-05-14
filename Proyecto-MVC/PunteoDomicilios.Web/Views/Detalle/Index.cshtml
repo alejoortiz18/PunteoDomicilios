@@ -71,6 +71,19 @@
             <div class="kpi-card">
                 <span class="kpi-value" id="kpiTotal">0</span>
                 <span class="kpi-label">Total archivos</span>
+                <div class="mt-2">
+                    <input type="text" id="inputBuscarTabla" class="form-control form-control-sm"
+                           placeholder="🔎 Buscar en tabla…" autocomplete="off"
+                           oninput="filtrarTabla(this.value)" />
+                </div>
+                <button id="btnDescargarFiltrados" class="btn btn-sm btn-primary kpi-btn mt-2"
+                        onclick="descargarFiltrados()" disabled>
+                    ⬇ Descargar
+                </button>
+                <button id="btnDescargarListaFiltrados" class="btn btn-sm btn-outline-primary kpi-btn mt-2"
+                        onclick="descargarListaFiltrados()" disabled>
+                    📊 Lista
+                </button>
             </div>
             <div class="kpi-card kpi-card--green">
                 <span class="kpi-value" id="kpiEncontrados">0</span>
@@ -79,17 +92,10 @@
                         onclick="descargarTodos()" disabled>
                     ⬇ Descargar todos
                 </button>
-                <div class="kpi-prefix-group mt-2">
-                    <label class="small text-muted d-block mb-1">Descargar por prefijo</label>
-                    <div class="input-group input-group-sm">
-                        <input type="text" id="inputPrefijo" class="form-control"
-                               placeholder="Ej: KI" maxlength="20" autocomplete="off" />
-                        <button id="btnDescargarPrefijo" class="btn btn-sm btn-outline-success"
-                                onclick="descargarPorPrefijo()" disabled>
-                            ⬇ Prefijo
-                        </button>
-                    </div>
-                </div>
+                <button id="btnDescargarListaEncontrados" class="btn btn-sm btn-outline-success kpi-btn mt-2"
+                        onclick="descargarListaEncontrados()" disabled>
+                    📊 Descargar Lista
+                </button>
             </div>
             <div class="kpi-card kpi-card--red">
                 <span class="kpi-value" id="kpiFaltantes">0</span>

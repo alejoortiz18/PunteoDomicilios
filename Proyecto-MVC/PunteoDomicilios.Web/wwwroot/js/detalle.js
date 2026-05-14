@@ -17,6 +17,7 @@ let soportesPaths       = [];    // paths encontrados en el último batch
 let soportesNrodctoPath = new Map(); // nrodcto → path para documentos encontrados
 let faltantesNrodctos   = [];    // nrodctos sin soporte en el último batch
 let todosRowItems      = [];    // todos los items del batch activo
+let filtradosActuales  = [];    // items actualmente visibles según el filtro activo
 let modoFiltroFaltantes = false;
 
 // ── Control de concurrencia: evita que un batch anterior actualice la UI ──────
@@ -154,7 +155,10 @@ async function verDia(fecha) {
     soportesNrodctoPath = new Map();
     faltantesNrodctos   = [];
     todosRowItems       = [];
+    filtradosActuales   = [];
     modoFiltroFaltantes = false;
+    const inputBuscar = document.getElementById('inputBuscarTabla');
+    if (inputBuscar) inputBuscar.value = '';
     document.getElementById('panelKpi').classList.add('d-none');
     document.getElementById('zipProgreso').classList.add('d-none');
 
@@ -347,7 +351,10 @@ function cerrarPanel() {
     soportesNrodctoPath = new Map();
     faltantesNrodctos   = [];
     todosRowItems       = [];
+    filtradosActuales   = [];
     modoFiltroFaltantes = false;
+    const inputBuscar = document.getElementById('inputBuscarTabla');
+    if (inputBuscar) inputBuscar.value = '';
     document.getElementById('panelDia').classList.add('d-none');
     document.getElementById('panelKpi').classList.add('d-none');
     document.getElementById('zipProgreso').classList.add('d-none');
@@ -398,10 +405,156 @@ function actualizarKpi(total, encontrados) {
     document.getElementById('kpiEncontrados').textContent = encontrados;
     document.getElementById('kpiFaltantes').textContent   = faltantes;
     document.getElementById('btnDescargarTodos').disabled    = encontrados === 0;
-    document.getElementById('btnDescargarPrefijo').disabled  = encontrados === 0;
+    document.getElementById('btnDescargarListaEncontrados').disabled = encontrados === 0;
     document.getElementById('btnVerFaltantes').disabled      = faltantes === 0;
     document.getElementById('btnDescargarLista').disabled = faltantes === 0;
+    // Inicializar filtradosActuales con todos los items al mostrar KPI
+    filtradosActuales = [...todosRowItems];
+    actualizarBtnDescargarFiltrados();
     document.getElementById('panelKpi').classList.remove('d-none');
+}
+
+// Habilita o deshabilita el botón según si hay texto en el buscador y encontrados en el filtro activo
+function actualizarBtnDescargarFiltrados() {
+    const btn     = document.getElementById('btnDescargarFiltrados');
+    const btnLista = document.getElementById('btnDescargarListaFiltrados');
+    const termino = (document.getElementById('inputBuscarTabla')?.value ?? '').trim();
+    const hayFiltro      = termino.length > 0;
+    const hayEncontrados = filtradosActuales.some(r => soportesNrodctoPath.has(r.nrodcto));
+    const hayFilas       = filtradosActuales.length > 0;
+    if (btn)      btn.disabled      = !(hayFiltro && hayEncontrados);
+    if (btnLista) btnLista.disabled = !(hayFiltro && hayFilas);
+}
+
+// ── Descargar lista CSV de todos los filtrados (encontrados + faltantes) ────
+function descargarListaFiltrados() {
+    if (!filtradosActuales.length) {
+        mostrarModal('Sin resultados', 'No existen registros filtrados para exportar.', 'info');
+        return;
+    }
+
+    const textoPlano = html => {
+        const tmp = document.createElement('span');
+        tmp.innerHTML = html;
+        return (tmp.textContent ?? '').trim();
+    };
+
+    const encabezado = 'Nrodcto,Destino,Cuota,Nro. Planilla,Estado';
+    const filas = filtradosActuales.map(r => [
+        `"${r.nrodcto}"`,
+        `"${r.destino}"`,
+        `"${fmtCOP.format(r.cuotaMod)}"`,
+        `"${r.nroPlanilla}"`,
+        `"${textoPlano(r.estadoHtml)}"`
+    ].join(','));
+
+    const csv  = [encabezado, ...filas].join('\r\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    const sufijo = (document.getElementById('inputBuscarTabla')?.value ?? '').trim().replace(/\s+/g, '_') || 'filtro';
+    a.download = `lista_${sufijo}_${diaActivo ?? 'descarga'}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+// ── Buscar / filtrar tabla de registros ────────────────────────
+function filtrarTabla(termino) {
+    if (!pagPanel || !todosRowItems.length) return;
+
+    // Si hay filtro de faltantes activo, desactivarlo primero
+    if (modoFiltroFaltantes) {
+        modoFiltroFaltantes = false;
+        const btn = document.getElementById('btnVerFaltantes');
+        if (btn) {
+            btn.textContent = '🔍 Ver';
+            btn.classList.replace('btn-danger', 'btn-outline-danger');
+        }
+    }
+
+    const q = termino.trim().toLowerCase();
+    if (!q) {
+        filtradosActuales = [...todosRowItems];
+        pagPanel.setData(todosRowItems, renderFilaRegistro);
+        actualizarBtnDescargarFiltrados();
+        return;
+    }
+
+    const textoPlano = html => {
+        const tmp = document.createElement('span');
+        tmp.innerHTML = html;
+        return tmp.textContent ?? '';
+    };
+
+    const filtrados = todosRowItems.filter(r =>
+        String(r.nrodcto).toLowerCase().includes(q) ||
+        String(r.destino).toLowerCase().includes(q) ||
+        String(r.nroPlanilla).toLowerCase().includes(q) ||
+        fmtCOP.format(r.cuotaMod).toLowerCase().includes(q) ||
+        textoPlano(r.estadoHtml).toLowerCase().includes(q)
+    );
+
+    filtradosActuales = filtrados;
+    pagPanel.setData(filtrados, renderFilaRegistro);
+    actualizarBtnDescargarFiltrados();
+}
+
+// ── Descargar soportes del filtro activo ──────────────────────
+function descargarFiltrados() {
+    if (!filtradosActuales.length) {
+        mostrarModal('Sin resultados', 'No existen registros para descargar.', 'info');
+        return;
+    }
+
+    const vistos = new Set();
+    const paths  = [];
+    for (const r of filtradosActuales) {
+        const path = soportesNrodctoPath.get(r.nrodcto);
+        if (path && !vistos.has(path)) {
+            paths.push(path);
+            vistos.add(path);
+        }
+    }
+
+    if (!paths.length) {
+        if (filtradosActuales.length === 1) {
+            mostrarModal('Sin soporte', 'El registro seleccionado no tiene soportes disponibles para descargar.', 'info');
+        } else {
+            mostrarModal('Sin soportes', 'Los registros filtrados no tienen soportes disponibles.', 'info');
+        }
+        return;
+    }
+
+    const sufijo = document.getElementById('inputBuscarTabla')?.value.trim().replace(/\s+/g, '_') || 'filtro';
+    ejecutarDescargaZip(paths, document.getElementById('btnDescargarFiltrados'), `soportes_${sufijo}_${diaActivo ?? 'descarga'}.zip`);
+}
+
+// ── Descargar lista de encontrados (CSV) ──────────────────────
+function descargarListaEncontrados() {
+    const encontrados = todosRowItems.filter(r => soportesNrodctoPath.has(r.nrodcto));
+    if (!encontrados.length) return;
+
+    const encabezado = 'Nrodcto,Destino,Nro. Planilla,Storage Path';
+    const filas = encontrados.map(r => [
+        `"${r.nrodcto}"`,
+        `"${r.destino}"`,
+        `"${r.nroPlanilla}"`,
+        `"${soportesNrodctoPath.get(r.nrodcto) ?? ''}"`
+    ].join(','));
+
+    const csv  = [encabezado, ...filas].join('\r\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `encontrados_${diaActivo ?? 'lista'}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
 }
 
 // ── Ver solo faltantes en la tabla ──────────────────────────────
@@ -415,7 +568,9 @@ function verFaltantes() {
         modoFiltroFaltantes = false;
         btn.textContent = '🔍 Ver';
         btn.classList.replace('btn-danger', 'btn-outline-danger');
+        filtradosActuales = [...todosRowItems];
         pagPanel.setData(todosRowItems, renderFilaRegistro);
+        actualizarBtnDescargarFiltrados();
     } else {
         // Filtrar a solo los faltantes
         modoFiltroFaltantes = true;
@@ -424,7 +579,9 @@ function verFaltantes() {
         const faltantes = todosRowItems.filter(r =>
             faltantesNrodctos.includes(r.nrodcto)
         );
+        filtradosActuales = faltantes;
         pagPanel.setData(faltantes, renderFilaRegistro);
+        actualizarBtnDescargarFiltrados();
     }
 }
 
@@ -461,12 +618,15 @@ async function ejecutarDescargaZip(paths, btnEl, filename) {
     const progFill  = document.getElementById('zipProgresoFill');
 
     // Deshabilitar todos los controles de descarga mientras corre este proceso
-    const btnTodos   = document.getElementById('btnDescargarTodos');
-    const btnPrefijo = document.getElementById('btnDescargarPrefijo');
-    const inputPref  = document.getElementById('inputPrefijo');
-    btnTodos.disabled   = true;
-    btnPrefijo.disabled = true;
-    inputPref.disabled  = true;
+    const btnTodos          = document.getElementById('btnDescargarTodos');
+    const btnListaEnc       = document.getElementById('btnDescargarListaEncontrados');
+    const btnFiltrados      = document.getElementById('btnDescargarFiltrados');
+    const btnListaFiltrados = document.getElementById('btnDescargarListaFiltrados');
+    btnTodos.disabled          = true;
+    btnListaEnc.disabled       = true;
+    if (btnFiltrados)      btnFiltrados.disabled      = true;
+    if (btnListaFiltrados) btnListaFiltrados.disabled  = true;
+    if (btnFiltrados) btnFiltrados.disabled = true;
 
     progLabel.textContent = 'Preparando ZIP...';
     progPct.textContent   = '';
@@ -539,8 +699,8 @@ async function ejecutarDescargaZip(paths, btnEl, filename) {
         descargaController = null;
         // Rehabilitar todos los controles de descarga al terminar (o si hubo error/cancelación)
         btnTodos.disabled   = false;
-        btnPrefijo.disabled = false;
-        inputPref.disabled  = false;
+        btnListaEnc.disabled = false;
+        actualizarBtnDescargarFiltrados();
     }
 }
 
