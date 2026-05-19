@@ -600,3 +600,68 @@ body {
   .tabla-footer { justify-content: center; }
   .pag-btn      { min-width: 28px; height: 28px; font-size: .78rem; }
 }
+
+/* ── Combobox cartera (Soportes por Fecha) ───────────────────── */
+.cartera-field {
+  min-width: min(100%, 360px);
+  flex: 1 1 280px;
+  max-width: 420px;
+}
+
+.cartera-combobox {
+  position: relative;
+}
+
+.cartera-combobox__input {
+  width: 100%;
+  padding-right: 2rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%2364748b' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right .75rem center;
+}
+
+.cartera-combobox__input:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-light);
+}
+
+.cartera-combobox__list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 200;
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  max-height: 240px;
+  overflow-y: auto;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow), 0 8px 24px rgba(15, 23, 42, .12);
+}
+
+.cartera-combobox__list li {
+  padding: 8px 12px;
+  font-size: .875rem;
+  cursor: pointer;
+  color: var(--text-main);
+}
+
+.cartera-combobox__list li:hover,
+.cartera-combobox__list li[aria-selected="true"] {
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+}
+
+.cartera-combobox__list li.combobox-empty {
+  cursor: default;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.cartera-combobox__list li.combobox-empty:hover {
+  background: transparent;
+  color: var(--text-muted);
+}

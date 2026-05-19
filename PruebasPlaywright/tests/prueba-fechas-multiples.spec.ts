@@ -13,7 +13,7 @@
 
 import { test, expect, type Page } from '@playwright/test';
 
-const BASE_URL = 'http://localhost:7261';
+const BASE_URL = 'https://localhost:7261';
 const MES_ABRIL = '2026-04';
 const MES_MAYO  = '2026-05';
 
@@ -67,7 +67,7 @@ async function esperarFinBatch(page: Page, timeout = 600_000): Promise<void> {
 // GRUPO A: Mes de Abril 2026
 // ─────────────────────────────────────────────────────────────────────────────
 test.describe('FM — Fechas múltiples › Abril 2026', () => {
-  test.use({ baseURL: BASE_URL });
+  test.use({ baseURL: BASE_URL, ignoreHTTPSErrors: true });
   test.setTimeout(120_000);
 
   test.beforeEach(async ({ page }) => {
@@ -141,7 +141,7 @@ test.describe('FM — Fechas múltiples › Abril 2026', () => {
 // GRUPO B: Varias fechas de Mayo 2026
 // ─────────────────────────────────────────────────────────────────────────────
 test.describe('FM — Fechas múltiples › Mayo 2026', () => {
-  test.use({ baseURL: BASE_URL });
+  test.use({ baseURL: BASE_URL, ignoreHTTPSErrors: true });
   test.setTimeout(600_000);
 
   test.beforeEach(async ({ page }) => {
@@ -202,7 +202,7 @@ test.describe('FM — Fechas múltiples › Mayo 2026', () => {
 // GRUPO C: Verificar progreso real (streaming, no fake)
 // ─────────────────────────────────────────────────────────────────────────────
 test.describe('FM — Progreso streaming real', () => {
-  test.use({ baseURL: BASE_URL });
+  test.use({ baseURL: BASE_URL, ignoreHTTPSErrors: true });
   test.setTimeout(600_000);
 
   // FM-07: La barra muestra valores intermedios (0 < x < total) durante el proceso

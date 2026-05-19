@@ -2,8 +2,10 @@ import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests',
+  workers: 1,
+  fullyParallel: false,
   use: {
-    baseURL: 'http://localhost:7261',
+    baseURL: 'https://localhost:7261',
     ignoreHTTPSErrors: true,
     browserName: 'chromium',
     headless: false,         // SIEMPRE visible — ver el navegador en vivo

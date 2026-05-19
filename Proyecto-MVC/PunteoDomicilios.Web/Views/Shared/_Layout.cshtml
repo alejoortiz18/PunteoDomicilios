@@ -37,6 +37,11 @@
             <span class="nav-icon">📤</span>
             <span>Soportes</span>
         </a>
+        <a class="nav-item @(controller == "soportesporfecha" ? "active" : "")"
+           asp-controller="SoportesPorFecha" asp-action="Index">
+            <span class="nav-icon">🗓</span>
+            <span>Soportes por Fecha</span>
+        </a>
     </nav>
 
     @if (!string.IsNullOrEmpty(usuarioActual))

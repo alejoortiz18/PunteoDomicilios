@@ -12,6 +12,8 @@
     "test:e2e": "playwright test -g \"BD-11\" --headed",
     "test:consulta": "playwright test tests/iniciar-consulta.spec.ts --headed",
     "test:consulta:slow": "playwright test tests/iniciar-consulta.spec.ts --headed --slow-mo=600",
+    "test:spf-completa": "playwright test tests/soportes-por-fecha-funcional-completa.spec.ts --headed",
+    "test:spf-completa:rapida": "playwright test tests/soportes-por-fecha-funcional-completa.spec.ts --grep \"SPF-F0[1-9]|SPF-F1[0-8]\" --headed",
     "report": "playwright show-report resultadosPruebas/playwright-report"
   },
   "devDependencies": {

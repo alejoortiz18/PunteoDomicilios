@@ -39,6 +39,7 @@ try
     // ── Repositorios y Servicios ──────────────────────────────────────────────
     builder.Services.AddScoped<IMensajeroRepository, MensajeroRepository>();
     builder.Services.AddScoped<IMensajeroService, MensajeroService>();
+    builder.Services.AddScoped<IFacturaPorFechaRepository, FacturaPorFechaRepository>();
     builder.Services.AddSingleton<IDocumentoCacheRepository, SqlDocumentoCacheRepository>();
 
     // ── HttpClient API interna (con retry y timeout) ──────────────────────────

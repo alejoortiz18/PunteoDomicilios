@@ -1,0 +1,167 @@
+@{
+    ViewData["Title"] = "Soportes por Fecha";
+    Layout = "_Layout";
+}
+
+<!-- Búsqueda por fecha -->
+<section class="section-card mt-4">
+    <div class="section-header">
+        <h2 class="section-title">🗓 Soportes por Fecha</h2>
+    </div>
+    <p class="text-muted small mb-3">
+        Selecciona la fecha de facturación y el tipo de cartera para consultar las facturas
+        y verificar automáticamente la disponibilidad de soportes.
+    </p>
+    <div class="d-flex gap-3 align-items-end flex-wrap">
+        <div>
+            <label for="inputFecha" class="form-label fw-medium small mb-1">Fecha de facturación</label>
+            <input type="date" id="inputFecha" class="form-control" style="max-width:210px" required />
+        </div>
+        <div class="cartera-field">
+            <label for="inputCarteraFilter" class="form-label fw-medium small mb-1">Tipo de cartera</label>
+            <div class="cartera-combobox" id="carteraCombobox">
+                <input type="text"
+                       id="inputCarteraFilter"
+                       class="form-control cartera-combobox__input"
+                       placeholder="Buscar o seleccionar cartera…"
+                       autocomplete="off"
+                       role="combobox"
+                       aria-expanded="false"
+                       aria-controls="carteraListbox"
+                       aria-autocomplete="list"
+                       disabled />
+                <input type="hidden" id="inputCarteraValue" />
+                <ul id="carteraListbox"
+                    class="cartera-combobox__list d-none"
+                    role="listbox"
+                    aria-label="Tipos de cartera"></ul>
+            </div>
+            <div id="carteraLoading" class="form-text text-muted d-none">Cargando carteras…</div>
+            <div id="carteraError" class="form-text text-danger d-none"></div>
+        </div>
+        <button id="btnBuscar" class="btn btn-primary" onclick="buscarFacturas()" disabled>
+            <span id="spinnerBuscar" class="spinner-border spinner-border-sm d-none me-1"
+                  role="status" aria-hidden="true"></span>
+            🔍 Buscar
+        </button>
+    </div>
+</section>
+
+<!-- Sección de resultados (oculta hasta buscar) -->
+<div id="seccionResultados" class="d-none mt-4">
+    <section class="section-card">
+        <div class="section-header">
+            <h2 class="section-title" id="tituloResultados">📋 Facturas del día</h2>
+        </div>
+
+        <!-- Barra de progreso verificación batch -->
+        <div id="panelProgreso" class="progreso-container mb-3 d-none">
+            <div class="d-flex justify-content-between mb-1 small text-muted">
+                <span>Verificando soportes...</span>
+                <span id="panelProgContador">0 / 0</span>
+            </div>
+            <div class="progress-batch">
+                <div id="panelProgFill" class="progress-batch__fill" style="width:0%"></div>
+            </div>
+        </div>
+
+        <!-- KPI: visible tras completar la verificación -->
+        <div id="panelKpi" class="kpi-strip mb-3 d-none">
+            <div class="kpi-card">
+                <span class="kpi-value" id="kpiTotal">0</span>
+                <span class="kpi-label">Total facturas</span>
+                <div class="mt-2">
+                    <input type="text" id="inputBuscarTabla" class="form-control form-control-sm"
+                           placeholder="🔎 Buscar en tabla…" autocomplete="off"
+                           oninput="filtrarTabla(this.value)" />
+                </div>
+                <button id="btnDescargarFiltrados" class="btn btn-sm btn-primary kpi-btn mt-2"
+                        onclick="descargarFiltrados()" disabled>
+                    ⬇ Descargar
+                </button>
+                <button id="btnDescargarListaFiltrados" class="btn btn-sm btn-outline-primary kpi-btn mt-2"
+                        onclick="descargarListaFiltrados()" disabled>
+                    📊 Lista
+                </button>
+            </div>
+            <div class="kpi-card kpi-card--green">
+                <span class="kpi-value" id="kpiEncontrados">0</span>
+                <span class="kpi-label">Con soporte</span>
+                <button id="btnDescargarTodos" class="btn btn-sm btn-success kpi-btn mt-2"
+                        onclick="descargarTodos()" disabled>
+                    ⬇ Descargar todos
+                </button>
+                <button id="btnDescargarListaEncontrados" class="btn btn-sm btn-outline-success kpi-btn mt-2"
+                        onclick="descargarListaEncontrados()" disabled>
+                    📊 Descargar Lista
+                </button>
+            </div>
+            <div class="kpi-card kpi-card--red">
+                <span class="kpi-value" id="kpiFaltantes">0</span>
+                <span class="kpi-label">Sin soporte</span>
+                <div class="kpi-btn-group mt-2">
+                    <button id="btnVerFaltantes" class="btn btn-sm btn-outline-danger kpi-btn"
+                            onclick="verFaltantes()" disabled>
+                        🔍 Ver
+                    </button>
+                    <button id="btnDescargarLista" class="btn btn-sm btn-danger kpi-btn"
+                            onclick="descargarListaFaltantes()" disabled>
+                        📊 Descargar lista
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Barra de progreso descarga ZIP -->
+        <div id="zipProgreso" class="progreso-container mb-3 d-none">
+            <div class="d-flex justify-content-between mb-1 small text-muted">
+                <span id="zipProgresoLabel">Preparando ZIP...</span>
+                <span id="zipProgresoPct"></span>
+            </div>
+            <div class="progress-batch">
+                <div id="zipProgresoFill" class="progress-batch__fill" style="width:0%"></div>
+            </div>
+        </div>
+
+        <!-- Skeleton loading -->
+        <div id="panelLoading" class="skeleton-rows d-none">
+            <div class="skeleton"></div>
+            <div class="skeleton"></div>
+            <div class="skeleton"></div>
+        </div>
+
+        <!-- Estado vacío -->
+        <div id="panelVacio" class="empty-state d-none">
+            <span>📭</span>
+            <p>No se encontraron facturas para la fecha seleccionada.</p>
+        </div>
+
+        <!-- Tabla de resultados -->
+        <div id="panelTabla" class="d-none">
+            <div class="punteo-table-wrap">
+                <table class="punteo-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>DCTOPRV</th>
+                            <th>Tipo</th>
+                            <th>Prefijo</th>
+                            <th>Nro. Dcto</th>
+                            <th>OrdenEntMV</th>
+                            <th>Fecha Factura</th>
+                            <th>Cartera</th>
+                            <th>Estado</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody id="resultadosTbody"></tbody>
+                </table>
+            </div>
+            <div id="pagResultados" class="tabla-footer d-none"></div>
+        </div>
+    </section>
+</div>
+
+@section Scripts {
+<script src="~/js/soportes-por-fecha.js" asp-append-version="true"></script>
+}

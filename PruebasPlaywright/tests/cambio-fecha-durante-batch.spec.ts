@@ -19,7 +19,7 @@
 
 import { test, expect, type Page, type Route } from '@playwright/test';
 
-const BASE_URL = 'http://localhost:7261';
+const BASE_URL = 'https://localhost:7261';
 const MES_MAYO = '2026-05';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -77,7 +77,7 @@ async function instalarDemoraEnBatchUnico(page: Page, delayMs = 5_000): Promise<
 // ── Suite principal ───────────────────────────────────────────────────────────
 
 test.describe('CB — Comportamiento de botones durante batch', () => {
-  test.use({ baseURL: BASE_URL });
+  test.use({ baseURL: BASE_URL, ignoreHTTPSErrors: true });
   test.setTimeout(120_000);
 
   test.beforeEach(async ({ page }) => {

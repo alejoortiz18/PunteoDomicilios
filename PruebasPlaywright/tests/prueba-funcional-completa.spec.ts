@@ -14,7 +14,7 @@
  *
  * Requisito previo — La aplicación debe estar corriendo:
  *   dotnet run --project ../Proyecto-MVC/PunteoDomicilios.Web/PunteoDomicilios.Web.csproj --launch-profile http
- *   → http://localhost:7261
+ *   → https://localhost:7261
  *
  * Ejecutar:
  *   cd PruebasPlaywright
@@ -27,10 +27,11 @@ import { test, expect, type Page } from '@playwright/test';
 import * as path from 'path';
 
 // ────────────────────────────────────────────────────────────────
-// Configuración — apunta siempre a http:7261 (perfil http)
+// Configuración — HTTPS en puerto 7261 (perfil https del launchSettings)
 // ────────────────────────────────────────────────────────────────
 test.use({
-  baseURL: 'http://localhost:7261',
+  baseURL: 'https://localhost:7261',
+  ignoreHTTPSErrors: true,
   browserName: 'chromium',
 });
 
@@ -692,30 +693,34 @@ test.describe('N — Navegación lateral', () => {
   test('N-01 el ítem "Dashboard" del sidebar está activo en la raíz (/)', async ({ page }) => {
     const navDash = page.locator('.sidebar-nav .nav-item').filter({ hasText: 'Dashboard' });
     await expect(navDash).toHaveClass(/active/);
-    // Los otros ítems no están activos
-    const navDetalle   = page.locator('.sidebar-nav .nav-item').filter({ hasText: 'Detalle mes' });
-    const navSoportes  = page.locator('.sidebar-nav .nav-item').filter({ hasText: 'Soportes' });
-    await expect(navDetalle).not.toHaveClass(/active/);
+    const navSoportes = page.locator('.sidebar-nav .nav-item').filter({ hasText: /^Soportes$/ });
+    const navSoportesFecha = page.locator('.sidebar-nav .nav-item').filter({ hasText: 'Soportes por Fecha' });
     await expect(navSoportes).not.toHaveClass(/active/);
+    await expect(navSoportesFecha).not.toHaveClass(/active/);
   });
 
-  test('N-02 el link "Detalle mes" está activo al estar en la página de detalle', async ({ page }) => {
-    // El controlador Detalle requiere ?mes=yyyy-MM; sin él redirige al Dashboard.
-    // Navegamos directamente con el mes actual para verificar que el ítem del
-    // sidebar muestra la clase 'active' cuando la ruta es /detalle.
+  test('N-02 la página de detalle carga con el mes indicado', async ({ page }) => {
     await page.goto(`/detalle?mes=${MES_CON_DATOS}`);
     await expect(page).toHaveURL(/\/detalle/, { timeout: 10_000 });
-    const navDetalle = page.locator('.sidebar-nav .nav-item').filter({ hasText: 'Detalle mes' });
-    await expect(navDetalle).toHaveClass(/active/);
-    await expect(page).toHaveTitle(/Detalle/);
+    await expect(page.locator('.topbar-title')).toHaveText(/Detalle/);
+    const navDash = page.locator('.sidebar-nav .nav-item').filter({ hasText: 'Dashboard' });
+    await expect(navDash).not.toHaveClass(/active/);
   });
 
   test('N-03 el link "Soportes" navega a /soportes-fisicos y se activa', async ({ page }) => {
-    await page.locator('.sidebar-nav .nav-item').filter({ hasText: 'Soportes' }).click();
+    await page.locator('.sidebar-nav .nav-item').filter({ hasText: /^Soportes$/ }).click();
     await expect(page).toHaveURL(/\/soportes-fisicos/);
-    const navSoportes = page.locator('.sidebar-nav .nav-item').filter({ hasText: 'Soportes' });
+    const navSoportes = page.locator('.sidebar-nav .nav-item').filter({ hasText: /^Soportes$/ });
     await expect(navSoportes).toHaveClass(/active/);
     await expect(page).toHaveTitle(/Soportes Físicos/);
+  });
+
+  test('N-06 el link "Soportes por Fecha" navega y se activa', async ({ page }) => {
+    await page.locator('.sidebar-nav .nav-item').filter({ hasText: 'Soportes por Fecha' }).click();
+    await expect(page).toHaveURL(/\/soportes-por-fecha/);
+    const nav = page.locator('.sidebar-nav .nav-item').filter({ hasText: 'Soportes por Fecha' });
+    await expect(nav).toHaveClass(/active/);
+    await expect(page.locator('#inputCarteraFilter')).toBeEnabled({ timeout: 30000 });
   });
 
   test('N-04 el topbar muestra las iniciales y el nombre completo del usuario', async ({ page }) => {

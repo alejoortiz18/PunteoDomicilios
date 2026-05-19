@@ -18,7 +18,7 @@ import { test, expect, type Page, type BrowserContext, type Browser } from '@pla
 const FECHA_DIA  = '2026-05-11';
 const MES        = '2026-05';
 const PREFIJO_KI = 'Ki';
-const BASE_URL   = 'http://localhost:7261';
+const BASE_URL   = 'https://localhost:7261';
 
 // ── Helper: login ─────────────────────────────────────────────────────────────
 async function loginComoMMUNOZ(page: Page): Promise<void> {
@@ -39,7 +39,7 @@ async function irADetalleMes(page: Page): Promise<void> {
 // SUITE A: Tests rápidos (DT-01 a DT-03) — no esperan fin del batch
 // ──────────────────────────────────────────────────────────────────────────────
 test.describe('DT — Detalle: días, progreso y tabla', () => {
-  test.use({ baseURL: BASE_URL });
+  test.use({ baseURL: BASE_URL, ignoreHTTPSErrors: true });
 
   test.beforeEach(async ({ page }) => {
     await loginComoMMUNOZ(page);
@@ -83,7 +83,7 @@ test.describe('DT — Detalle: días, progreso y tabla', () => {
 // El beforeAll espera el batch UNA SOLA VEZ (hasta 10 min).
 // ──────────────────────────────────────────────────────────────────────────────
 test.describe('DT — Detalle: KPIs y descargas (post-batch)', () => {
-  test.use({ baseURL: BASE_URL });
+  test.use({ baseURL: BASE_URL, ignoreHTTPSErrors: true });
   test.setTimeout(900_000);
 
   let sharedPage: Page;
