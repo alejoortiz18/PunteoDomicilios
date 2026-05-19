@@ -313,10 +313,11 @@ test.describe('SPF-F — Búsqueda y estados', () => {
       return;
     }
     const headers = page.locator('.punteo-table thead th');
-    await expect(headers).toHaveCount(10);
-    for (const texto of ['DCTOPRV', 'Tipo', 'Prefijo', 'Nro. Dcto', 'Estado', 'Acción']) {
+    await expect(headers).toHaveCount(12);
+    for (const texto of ['OrdenEntMV', 'TIPODCTO', 'NRODCTO', 'Fecha orden', 'TipoCar', 'Estado', 'Acción']) {
       await expect(page.locator('.punteo-table thead')).toContainText(texto);
     }
+    await expect(page.locator('.punteo-table thead')).not.toContainText('DCTOPRV');
     await expect(page.locator('#resultadosTbody tr').first()).toBeVisible();
   });
 
@@ -382,8 +383,8 @@ test.describe('SPF-F — KPIs, filtros y descargas (post-batch)', () => {
     kpiEncontrados = parseKpi(await sharedPage.locator('#kpiEncontrados').textContent());
     kpiFaltantes = parseKpi(await sharedPage.locator('#kpiFaltantes').textContent());
 
-    const primerCodigo = await sharedPage.locator('#resultadosTbody tr code').first().textContent();
-    terminoFiltro = (primerCodigo ?? '').trim().slice(0, 6);
+      const primerCodigo = await sharedPage.locator('#resultadosTbody tr code').first().textContent();
+      terminoFiltro = (primerCodigo ?? '').trim().replace(/—/g, '').slice(0, 6);
     if (!terminoFiltro) terminoFiltro = 'FR';
 
     console.log(`beforeAll → KPI total=${kpiTotal} encontrados=${kpiEncontrados} faltantes=${kpiFaltantes}`);
@@ -509,7 +510,7 @@ test.describe('SPF-F — KPIs, filtros y descargas (post-batch)', () => {
     await expect(btnVer).toBeVisible({ timeout: 10_000 });
     await btnVer.click();
     await expect(sharedPage.locator('#modalSoporte')).toBeVisible();
-    await expect(sharedPage.locator('#modalSoporteBody')).toContainText(/DCTOPRV/i);
+    await expect(sharedPage.locator('#modalSoporteBody')).toContainText(/Clave documento/i);
     await expect(sharedPage.locator('#modalDescargaLink')).toBeVisible();
     await sharedPage.locator('#modalSoporte .btn-close').click();
     await expect(sharedPage.locator('#modalSoporte')).toBeHidden();
@@ -527,7 +528,7 @@ test.describe('SPF-F — KPIs, filtros y descargas (post-batch)', () => {
   test('SPF-F31 descarga CSV de faltantes', async () => {
     test.skip(
       (await sharedPage.locator('#resultadosTbody .tag-red').count()) === 0,
-      'No hay DCTOPRV marcados como Sin soporte',
+      'No hay filas marcadas como Sin soporte',
     );
     await descargarCsvYVerificar(sharedPage, '#btnDescargarLista', /faltantes_.*\.csv$/i);
   });
@@ -594,7 +595,9 @@ test.describe('SPF-F — KPIs, filtros y descargas (post-batch)', () => {
     expect(Array.isArray(facturas)).toBe(true);
     expect(facturas.length).toBe(kpiTotal);
     if (facturas.length > 0) {
-      expect(facturas[0]).toHaveProperty('dctoPrv');
+      expect(facturas[0]).toHaveProperty('tipoDcto');
+      expect(facturas[0]).toHaveProperty('tipoDc');
+      expect(facturas[0]).toHaveProperty('claveSoporte');
       expect(facturas[0]).toHaveProperty('tipoFactura');
     }
   });

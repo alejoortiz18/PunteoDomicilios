@@ -86,8 +86,7 @@ public class FacturaPorFechaRepository : IFacturaPorFechaRepository
                 T.NIT                                                               AS Nit,
                 CAST(T.FECHA AS DATE)                                               AS FechaFactura,
                 T.TIPOCAR                                                           AS TipoCar,
-                K.NOMBRE                                                            AS NombreCartera,
-                T.DCTOPRV                                                           AS DctoPrv
+                K.NOMBRE                                                            AS NombreCartera
             FROM TRADE T
             LEFT JOIN MVTRADE M
                 ON T.ORIGEN   = M.ORIGEN
@@ -142,9 +141,9 @@ public class FacturaPorFechaRepository : IFacturaPorFechaRepository
             TipoDc        = S("TipoDc"),
             Nit           = S("Nit"),
             FechaFactura  = D("FechaFactura"),
+            FechaOrden    = D("FechaFactura"),
             TipoCar       = S("TipoCar"),
             NombreCartera = S("NombreCartera"),
-            DctoPrv       = S("DctoPrv"),
         };
     }
 }

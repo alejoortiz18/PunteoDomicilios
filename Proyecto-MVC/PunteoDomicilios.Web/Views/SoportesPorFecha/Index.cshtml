@@ -6,7 +6,23 @@
 <!-- Búsqueda por fecha -->
 <section class="section-card mt-4">
     <div class="section-header">
-        <h2 class="section-title">🗓 Soportes por Fecha</h2>
+        <h2 class="section-title section-title--with-icon">
+            <span class="section-title-icon nav-icon-fecha" aria-hidden="true">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" focusable="false">
+                    <rect class="nav-cal-body" x="3" y="6" width="18" height="15" rx="2.5"/>
+                    <path class="nav-cal-head" d="M3 9.5A2.5 2.5 0 0 1 5.5 7h13a2.5 2.5 0 0 1 2.5 2.5V10H3V9.5z"/>
+                    <rect class="nav-cal-pin" x="7" y="3" width="2.5" height="5" rx="1.25"/>
+                    <rect class="nav-cal-pin" x="14.5" y="3" width="2.5" height="5" rx="1.25"/>
+                    <circle class="nav-cal-dot" cx="8" cy="14.5" r="1.35"/>
+                    <circle class="nav-cal-dot" cx="12" cy="14.5" r="1.35"/>
+                    <circle class="nav-cal-dot" cx="16" cy="14.5" r="1.35"/>
+                    <circle class="nav-cal-dot nav-cal-dot--accent" cx="8" cy="18.5" r="1.35"/>
+                    <circle class="nav-cal-dot" cx="12" cy="18.5" r="1.35"/>
+                    <circle class="nav-cal-dot" cx="16" cy="18.5" r="1.35"/>
+                </svg>
+            </span>
+            Soportes por Fecha
+        </h2>
     </div>
     <p class="text-muted small mb-3">
         Selecciona la fecha de facturación y el tipo de cartera para consultar las facturas
@@ -142,14 +158,16 @@
                 <table class="punteo-table">
                     <thead>
                         <tr>
-                            <th>#</th>
-                            <th>DCTOPRV</th>
-                            <th>Tipo</th>
-                            <th>Prefijo</th>
-                            <th>Nro. Dcto</th>
                             <th>OrdenEntMV</th>
-                            <th>Fecha Factura</th>
-                            <th>Cartera</th>
+                            <th>Tipo factura</th>
+                            <th>TIPODCTO</th>
+                            <th>NRODCTO</th>
+                            <th>TIPODC</th>
+                            <th>NIT</th>
+                            <th>Fecha factura</th>
+                            <th>Fecha orden</th>
+                            <th>TipoCar</th>
+                            <th>Nombre cartera</th>
                             <th>Estado</th>
                             <th>Acción</th>
                         </tr>

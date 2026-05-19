@@ -3,8 +3,8 @@
 
 // ── Estado del módulo ────────────────────────────────────────────────────────
 let soportesPaths       = [];          // storage_paths de soportes encontrados
-let soportesDctoprvPath = new Map();   // dctoprv → storagePath
-let faltantesDctoprv   = [];           // DCTPRVs sin soporte
+let soportesClavePath  = new Map();    // clave doc. (TIPODCTO+TIPODC) → storagePath
+let faltantesClaves    = [];           // claves sin soporte
 let todosRowItems      = [];           // todos los ítems del batch activo
 let consultaController  = null;        // AbortController de la consulta activa
 let descargaController  = null;        // AbortController de la descarga ZIP activa
@@ -22,6 +22,13 @@ const fmtFecha = (iso) => {
     const [y, m, d] = iso.split('-');
     return `${d}/${m}/${y}`;
 };
+
+/** Clave para API consultasoporte: TIPODCTO + NRODCTO sin espacios (ej. D1+1515480 → D11515480). */
+function claveSoporteFromFactura(f) {
+    const desdeApi = (f?.claveSoporte ?? '').trim();
+    if (desdeApi) return desdeApi;
+    return String(f?.tipoDcto ?? '').trim() + String(f?.nroDcto ?? '').trim();
+}
 
 // ── Inicialización ────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
@@ -60,8 +67,8 @@ async function buscarFacturas() {
 
     fechaActiva         = fecha;
     soportesPaths       = [];
-    soportesDctoprvPath = new Map();
-    faltantesDctoprv   = [];
+    soportesClavePath = new Map();
+    faltantesClaves   = [];
     todosRowItems       = [];
     filtradosActuales   = [];
     modoFiltroFaltantes = false;
@@ -114,20 +121,27 @@ async function buscarFacturas() {
         }
 
         // ── FASE 2: construir filas con estado pendiente ──────────────────────
-        const rowItems = facturas.map((f, i) => ({
-            idx:          i + 1,
-            dctoprv:      f.dctoPrv       ?? '',
-            ordenEntMv:   f.ordenEntMv    ?? '—',
-            tipoFactura:  f.tipoFactura   ?? '—',
-            prefijo:      f.prefijo       ?? '—',
-            nroDcto:      f.nroDcto       ?? '—',
-            fechaFactura: f.fechaFactura  ?? '—',
-            nombreCartera: f.nombreCartera ?? '—',
-            estadoHtml:   f.dctoPrv
-                ? '<span class="tag tag-blue">⏳ Consultando…</span>'
-                : '<span class="tag tag-yellow">⚠ Sin DCTOPRV</span>',
-            accionHtml:   '—',
-        }));
+        const rowItems = facturas.map((f, i) => {
+            const claveSoporte = claveSoporteFromFactura(f);
+            return {
+                idx:           i + 1,
+                claveSoporte,
+                tipoDcto:      f.tipoDcto      ?? '—',
+                tipoDc:        f.tipoDc        ?? '—',
+                nit:           f.nit           ?? '—',
+                ordenEntMv:    f.ordenEntMv    ?? '—',
+                tipoFactura:   f.tipoFactura   ?? '—',
+                nroDcto:       f.nroDcto       ?? '—',
+                fechaFactura:  f.fechaFactura  ?? '—',
+                fechaOrden:    f.fechaOrden    ?? f.fechaFactura ?? '—',
+                tipoCar:       f.tipoCar       ?? '—',
+                nombreCartera: f.nombreCartera ?? '—',
+                estadoHtml:    claveSoporte
+                    ? '<span class="tag tag-blue">⏳ Consultando…</span>'
+                    : '<span class="tag tag-yellow">⚠ Sin clave documento</span>',
+                accionHtml:    '—',
+            };
+        });
 
         todosRowItems = [...rowItems];
 
@@ -136,38 +150,35 @@ async function buscarFacturas() {
         document.getElementById('panelTabla').classList.remove('d-none');
         actualizarKpi(rowItems.length, 0);
 
-        // DCTPRVs únicos con valor (son las claves para consultar soportes)
-        const dctoprvs = [...new Set(
-            facturas.map(f => f.dctoPrv).filter(v => v && v.trim())
+        // Claves únicas TIPODCTO+NRODCTO para consultar soportes (consultasoporte/{clave})
+        const clavesDocumento = [...new Set(
+            facturas.map(claveSoporteFromFactura).filter(v => v.length > 0)
         )];
 
-        if (!dctoprvs.length) {
-            // Sin DCTPRVs — mostrar KPI con cero encontrados y salir
+        if (!clavesDocumento.length) {
+            // Sin clave válida — mostrar KPI con cero encontrados y salir
             actualizarKpi(rowItems.length, 0);
             consultaController = null;
             return;
         }
 
         // ── FASE 3: consultar soportes en streaming ───────────────────────────
-        const progBar  = document.getElementById('panelProgreso');
-        const progCnt  = document.getElementById('panelProgContador');
-        const progFill = document.getElementById('panelProgFill');
+        const progBar = document.getElementById('panelProgreso');
 
-        progCnt.textContent = `0 / ${dctoprvs.length}`;
-        progFill.style.width = '0%';
+        actualizarBarraProgresoFacturas(rowItems);
         progBar.classList.remove('d-none');
 
         const streamRes = await fetch('/api/soportes-por-fecha/soporte-batch-stream', {
             method:  'POST',
             headers: { 'Content-Type': 'application/json' },
-            body:    JSON.stringify(dctoprvs),
+            body:    JSON.stringify(clavesDocumento),
             signal,
         });
 
         if (!streamRes.ok) {
-            // Error de API — marcar todas las filas con valor DCTOPRV como error
+            // Error de API — marcar filas con clave como error
             rowItems.forEach((row, i) => {
-                if (!row.dctoprv) return;
+                if (!row.claveSoporte) return;
                 rowItems[i] = {
                     ...row,
                     estadoHtml: '<span class="tag tag-yellow">⚠ Error API</span>',
@@ -175,25 +186,24 @@ async function buscarFacturas() {
                 };
                 pagResultados.updateItem(i, rowItems[i]);
             });
-            progFill.style.width = '100%';
+            actualizarBarraProgresoFacturas(rowItems);
             _progresoTimer1 = setTimeout(() => { progBar.classList.add('d-none'); _progresoTimer1 = null; }, 800);
             _progresoTimer2 = setTimeout(() => { actualizarKpi(rowItems.length, 0); _progresoTimer2 = null; }, 900);
             consultaController = null;
             return;
         }
 
-        // Mapa dctoprv → índices de filas (puede haber duplicados)
+        // Mapa clave → índices de filas (puede haber duplicados)
         const rowIndexMap = new Map();
         rowItems.forEach((row, i) => {
-            if (!row.dctoprv) return;
-            if (!rowIndexMap.has(row.dctoprv)) rowIndexMap.set(row.dctoprv, []);
-            rowIndexMap.get(row.dctoprv).push(i);
+            if (!row.claveSoporte) return;
+            if (!rowIndexMap.has(row.claveSoporte)) rowIndexMap.set(row.claveSoporte, []);
+            rowIndexMap.get(row.claveSoporte).push(i);
         });
 
         const reader  = streamRes.body.getReader();
         const decoder = new TextDecoder();
-        let buffer    = '';
-        let procesados = 0;
+        let buffer = '';
 
         try {
             while (true) {
@@ -211,7 +221,6 @@ async function buscarFacturas() {
                     let item;
                     try { item = JSON.parse(line); } catch { continue; }
 
-                    procesados++;
                     const indices = rowIndexMap.get(item.nrodcto) ?? [];
                     for (const i of indices) {
                         const { estadoHtml, accionHtml } = procesarEstadoItem(rowItems[i], item);
@@ -219,8 +228,7 @@ async function buscarFacturas() {
                         pagResultados.updateItem(i, rowItems[i]);
                     }
 
-                    progCnt.textContent = `${procesados} / ${dctoprvs.length}`;
-                    progFill.style.width = ((procesados / dctoprvs.length) * 100) + '%';
+                    actualizarBarraProgresoFacturas(rowItems);
                     actualizarKpi(rowItems.length, contarFilasConSoporte(rowItems));
                 }
             }
@@ -230,8 +238,7 @@ async function buscarFacturas() {
         }
 
         // ── FASE 4: finalizar UI ──────────────────────────────────────────────
-        progFill.style.width  = '100%';
-        progCnt.textContent   = `${dctoprvs.length} / ${dctoprvs.length}`;
+        actualizarBarraProgresoFacturas(rowItems);
         todosRowItems = [...rowItems];
 
         _progresoTimer1 = setTimeout(() => { progBar.classList.add('d-none'); _progresoTimer1 = null; }, 800);
@@ -266,12 +273,12 @@ function procesarEstadoItem(row, item) {
         const path = item.storagePath ?? '';
         const fReg = item.fechaRegistro ?? '';
         if (path && !soportesPaths.includes(path)) soportesPaths.push(path);
-        if (path) soportesDctoprvPath.set(row.dctoprv, path);
+        if (path) soportesClavePath.set(row.claveSoporte, path);
         return {
             estadoHtml: '<span class="tag tag-green">✅ Encontrado</span>',
             accionHtml: path
                 ? `<button class="btn btn-sm btn-outline-success"
-                          onclick='verSoporte(${JSON.stringify(row.dctoprv)}, ${JSON.stringify(fReg)}, ${JSON.stringify(path)})'>
+                          onclick='verSoporte(${JSON.stringify(row.claveSoporte)}, ${JSON.stringify(fReg)}, ${JSON.stringify(path)})'>
                        🔍 Ver soporte
                    </button>`
                 : '<span class="text-muted small">Sin archivo</span>',
@@ -279,8 +286,8 @@ function procesarEstadoItem(row, item) {
     }
     // estado 2 = Faltante
     if (item.estado === 2) {
-        if (!faltantesDctoprv.includes(row.dctoprv))
-            faltantesDctoprv.push(row.dctoprv);
+        if (!faltantesClaves.includes(row.claveSoporte))
+            faltantesClaves.push(row.claveSoporte);
         return {
             estadoHtml: '<span class="tag tag-red">❌ Sin soporte</span>',
             accionHtml: '—',
@@ -293,13 +300,15 @@ function procesarEstadoItem(row, item) {
 function renderFilaFactura(r) {
     return `
         <tr>
-            <td class="text-muted small">${r.idx}</td>
-            <td><code>${esc(r.dctoprv || '—')}</code></td>
-            <td><span class="badge ${r.tipoFactura === 'DIRECTA' ? 'bg-primary' : 'bg-secondary'}">${esc(r.tipoFactura)}</span></td>
-            <td>${esc(r.prefijo)}</td>
-            <td>${esc(r.nroDcto)}</td>
             <td class="small text-muted">${esc(r.ordenEntMv)}</td>
+            <td><span class="badge ${r.tipoFactura === 'DIRECTA' ? 'bg-primary' : 'bg-secondary'}">${esc(r.tipoFactura)}</span></td>
+            <td><code>${esc(r.tipoDcto)}</code></td>
+            <td class="col-nrodcto">${esc(r.nroDcto)}</td>
+            <td class="small">${esc(r.tipoDc)}</td>
+            <td class="small">${esc(r.nit)}</td>
             <td class="small">${fmtFecha(r.fechaFactura)}</td>
+            <td class="small">${fmtFecha(r.fechaOrden)}</td>
+            <td class="small">${esc(r.tipoCar)}</td>
             <td class="small">${esc(r.nombreCartera)}</td>
             <td>${r.estadoHtml}</td>
             <td>${r.accionHtml}</td>
@@ -307,14 +316,14 @@ function renderFilaFactura(r) {
 }
 
 // ── Modal soporte (reutiliza el modal global del layout) ─────────────────────
-function verSoporte(dctoprv, fechaRegistro, storagePath) {
+function verSoporte(claveSoporte, fechaRegistro, storagePath) {
     const body = document.getElementById('modalSoporteBody');
     const link = document.getElementById('modalDescargaLink');
 
     body.innerHTML = `
         <dl class="row mb-0">
-            <dt class="col-5">DCTOPRV</dt>
-            <dd class="col-7"><code>${esc(dctoprv)}</code></dd>
+            <dt class="col-5">Clave documento</dt>
+            <dd class="col-7"><code>${esc(claveSoporte)}</code></dd>
             <dt class="col-5">Fecha registro</dt>
             <dd class="col-7">${esc(fechaRegistro || '—')}</dd>
             <dt class="col-5">Archivo</dt>
@@ -331,6 +340,21 @@ function verSoporte(dctoprv, fechaRegistro, storagePath) {
 
 function contarFilasConSoporte(rowItems) {
     return rowItems.filter(r => r.estadoHtml && r.estadoHtml.includes('tag-green')).length;
+}
+
+/** Filas que ya salieron del estado «Consultando…» (mismo total que KPI Total facturas). */
+function contarFilasVerificadas(rowItems) {
+    return rowItems.filter(r => !String(r.estadoHtml ?? '').includes('Consultando')).length;
+}
+
+function actualizarBarraProgresoFacturas(rowItems) {
+    const progCnt  = document.getElementById('panelProgContador');
+    const progFill = document.getElementById('panelProgFill');
+    if (!progCnt || !progFill) return;
+    const total       = rowItems.length;
+    const verificadas = contarFilasVerificadas(rowItems);
+    progCnt.textContent = `${verificadas} / ${total}`;
+    progFill.style.width = total > 0 ? `${(verificadas / total) * 100}%` : '0%';
 }
 
 function textoPlanoEstado(html) {
@@ -359,7 +383,7 @@ function actualizarBtnDescargarFiltrados() {
     const btnLista = document.getElementById('btnDescargarListaFiltrados');
     const termino  = (document.getElementById('inputBuscarTabla')?.value ?? '').trim();
     const hayFiltro      = termino.length > 0;
-    const hayEncontrados = filtradosActuales.some(r => soportesDctoprvPath.has(r.dctoprv));
+    const hayEncontrados = filtradosActuales.some(r => soportesClavePath.has(r.claveSoporte));
     const hayFilas       = filtradosActuales.length > 0;
     if (btn)      btn.disabled      = !(hayFiltro && hayEncontrados);
     if (btnLista) btnLista.disabled = !(hayFiltro && hayFilas);
@@ -387,13 +411,17 @@ function filtrarTabla(termino) {
     }
 
     const filtrados = todosRowItems.filter(r =>
-        String(r.dctoprv).toLowerCase().includes(q) ||
+        String(r.claveSoporte).toLowerCase().includes(q) ||
+        String(r.tipoDcto).toLowerCase().includes(q) ||
+        String(r.tipoDc).toLowerCase().includes(q) ||
         String(r.tipoFactura).toLowerCase().includes(q) ||
-        String(r.prefijo).toLowerCase().includes(q) ||
         String(r.nroDcto).toLowerCase().includes(q) ||
+        String(r.nit).toLowerCase().includes(q) ||
         String(r.ordenEntMv).toLowerCase().includes(q) ||
         String(r.nombreCartera).toLowerCase().includes(q) ||
         String(r.fechaFactura).toLowerCase().includes(q) ||
+        String(r.fechaOrden).toLowerCase().includes(q) ||
+        String(r.tipoCar).toLowerCase().includes(q) ||
         textoPlanoEstado(r.estadoHtml).toLowerCase().includes(q)
     );
 
@@ -418,7 +446,7 @@ function verFaltantes() {
         modoFiltroFaltantes = true;
         btn.textContent = '🔍 Ver todos';
         btn.classList.replace('btn-outline-danger', 'btn-danger');
-        const faltantes = todosRowItems.filter(r => faltantesDctoprv.includes(r.dctoprv));
+        const faltantes = todosRowItems.filter(r => faltantesClaves.includes(r.claveSoporte));
         filtradosActuales = faltantes;
         pagResultados.setData(faltantes, renderFilaFactura);
     }
@@ -432,11 +460,10 @@ function descargarListaFiltrados() {
         return;
     }
 
-    const encabezado = 'DCTOPRV,Tipo,Prefijo,Nro. Dcto,OrdenEntMV,Fecha Factura,Cartera,Estado';
+    const encabezado = 'Clave,Tipo,Nro. Dcto,OrdenEntMV,Fecha Factura,Cartera,Estado';
     const filas = filtradosActuales.map(r => [
-        `"${r.dctoprv}"`,
+        `"${r.claveSoporte}"`,
         `"${r.tipoFactura}"`,
-        `"${r.prefijo}"`,
         `"${r.nroDcto}"`,
         `"${r.ordenEntMv}"`,
         `"${fmtFecha(r.fechaFactura)}"`,
@@ -449,32 +476,30 @@ function descargarListaFiltrados() {
 }
 
 function descargarListaEncontrados() {
-    const encontrados = todosRowItems.filter(r => soportesDctoprvPath.has(r.dctoprv));
+    const encontrados = todosRowItems.filter(r => soportesClavePath.has(r.claveSoporte));
     if (!encontrados.length) return;
 
-    const encabezado = 'DCTOPRV,Tipo,Prefijo,Nro. Dcto,OrdenEntMV,Storage Path';
+    const encabezado = 'Clave,Tipo,Nro. Dcto,OrdenEntMV,Storage Path';
     const filas = encontrados.map(r => [
-        `"${r.dctoprv}"`,
+        `"${r.claveSoporte}"`,
         `"${r.tipoFactura}"`,
-        `"${r.prefijo}"`,
         `"${r.nroDcto}"`,
         `"${r.ordenEntMv}"`,
-        `"${soportesDctoprvPath.get(r.dctoprv) ?? ''}"`,
+        `"${soportesClavePath.get(r.claveSoporte) ?? ''}"`,
     ].join(','));
 
     descargarCsv([encabezado, ...filas], `encontrados_${fechaActiva ?? 'lista'}.csv`);
 }
 
 function descargarListaFaltantes() {
-    if (!faltantesDctoprv.length) return;
+    if (!faltantesClaves.length) return;
 
-    const encabezado = 'DCTOPRV,Tipo,Prefijo,Nro. Dcto,OrdenEntMV';
+    const encabezado = 'Clave,Tipo,Nro. Dcto,OrdenEntMV';
     const filas = todosRowItems
-        .filter(r => faltantesDctoprv.includes(r.dctoprv))
+        .filter(r => faltantesClaves.includes(r.claveSoporte))
         .map(r => [
-            `"${r.dctoprv}"`,
+            `"${r.claveSoporte}"`,
             `"${r.tipoFactura}"`,
-            `"${r.prefijo}"`,
             `"${r.nroDcto}"`,
             `"${r.ordenEntMv}"`,
         ].join(','));
@@ -505,7 +530,7 @@ function descargarFiltrados() {
     const vistos = new Set();
     const paths  = [];
     for (const r of filtradosActuales) {
-        const path = soportesDctoprvPath.get(r.dctoprv);
+        const path = soportesClavePath.get(r.claveSoporte);
         if (path && !vistos.has(path)) {
             paths.push(path);
             vistos.add(path);

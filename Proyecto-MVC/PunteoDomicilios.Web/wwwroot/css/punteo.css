@@ -90,6 +90,42 @@ body {
 .nav-item.active { background: #2563eb; color: #fff; }
 .nav-icon { font-size: 1rem; }
 
+/* Calendario — ícono con relleno (evita el “1” del emoji/SVG de trazo fino en Windows) */
+.nav-icon-fecha {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+  --nav-cal-body: #38bdf8;
+  --nav-cal-head: #1d4ed8;
+  --nav-cal-pin: #bae6fd;
+  --nav-cal-dot: #f0f9ff;
+  --nav-cal-accent: #fde68a;
+}
+
+.nav-icon-fecha svg {
+  display: block;
+  width: 20px;
+  height: 20px;
+}
+
+.nav-cal-body { fill: var(--nav-cal-body); }
+.nav-cal-head { fill: var(--nav-cal-head); }
+.nav-cal-pin  { fill: var(--nav-cal-pin); }
+.nav-cal-dot  { fill: var(--nav-cal-dot); }
+.nav-cal-dot--accent { fill: var(--nav-cal-accent); }
+
+.nav-item:hover .nav-icon-fecha,
+.nav-item.active .nav-icon-fecha {
+  --nav-cal-body: rgba(255, 255, 255, 0.28);
+  --nav-cal-head: #ffffff;
+  --nav-cal-pin: rgba(255, 255, 255, 0.92);
+  --nav-cal-dot: rgba(255, 255, 255, 0.88);
+  --nav-cal-accent: #fef08a;
+}
+
 .sidebar-footer {
   padding: 14px 16px;
   border-top: 1px solid #334155;
@@ -189,6 +225,15 @@ body {
 }
 
 .section-title { font-size: .95rem; font-weight: 600; margin: 0; }
+.section-title--with-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+}
+.section-title-icon.nav-icon-fecha {
+  width: 1.35rem;
+  height: 1.35rem;
+}
 
 /* ── KPI Cards ───────────────────────────────────────────────── */
 .kpi-row {
@@ -257,6 +302,10 @@ body {
 
 .punteo-table tr:last-child td { border-bottom: none; }
 .punteo-table tr:hover td { background: #f8fafc; }
+.punteo-table td.col-nrodcto {
+  font-weight: 600;
+  color: #be185d;
+}
 
 /* ── Tags / Badges ───────────────────────────────────────────── */
 .tag {

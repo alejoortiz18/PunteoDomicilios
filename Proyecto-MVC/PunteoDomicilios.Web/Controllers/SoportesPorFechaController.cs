@@ -87,11 +87,11 @@ public class SoportesPorFechaController : Controller
     }
 
     /// <summary>
-    /// Streaming NDJSON: emite un resultado por cada DCTOPRV conforme se resuelve.
+    /// Streaming NDJSON: emite un resultado por cada clave (TIPODCTO+TIPODC) conforme se resuelve.
     /// POST /api/soportes-por-fecha/soporte-batch-stream  body: ["FMF315307", ...]
     /// </summary>
     [HttpPost("/api/soportes-por-fecha/soporte-batch-stream")]
-    public async Task StreamSoporteBatch([FromBody] List<string> dctoprvs, CancellationToken ct)
+    public async Task StreamSoporteBatch([FromBody] List<string> clavesDocumento, CancellationToken ct)
     {
         var usuario = HttpContext.Session.GetString(SessionKeys.Usuario);
         if (string.IsNullOrEmpty(usuario))
@@ -100,7 +100,7 @@ public class SoportesPorFechaController : Controller
             return;
         }
 
-        if (dctoprvs is null || dctoprvs.Count == 0)
+        if (clavesDocumento is null || clavesDocumento.Count == 0)
         {
             Response.StatusCode = 400;
             return;
@@ -116,7 +116,7 @@ public class SoportesPorFechaController : Controller
 
         try
         {
-            await foreach (var resultado in _soporteApiService.ConsultarBatchStreamAsync(dctoprvs, ct))
+            await foreach (var resultado in _soporteApiService.ConsultarBatchStreamAsync(clavesDocumento, ct))
             {
                 if (ct.IsCancellationRequested) break;
                 var line = JsonSerializer.Serialize(resultado, jsonOpts) + "\n";

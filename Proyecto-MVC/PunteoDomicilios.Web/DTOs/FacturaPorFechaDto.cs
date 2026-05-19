@@ -16,6 +16,8 @@ public class FacturaPorFechaDto
     public string? TipoCar       { get; init; }
     public string? NombreCartera { get; init; }
     public string? CtaCobro      { get; init; }
-    /// <summary>Clave para consultar soporte en la API interna.</summary>
-    public string? DctoPrv       { get; init; }
+
+    /// <summary>Clave para /api/v1/consultasoporte/{clave}: TIPODCTO + NRODCTO sin espacios (ej. D1+1515480 → D11515480).</summary>
+    public string ClaveSoporte =>
+        string.Concat(TipoDcto?.Trim() ?? string.Empty, NroDcto?.Trim() ?? string.Empty);
 }
