@@ -16,6 +16,10 @@ let carterasCatalogo    = [];          // nombres desde TIPOCAR
 let carteraHighlight    = -1;
 let filtradosActuales   = [];          // filas visibles según filtro activo
 let modoFiltroFaltantes = false;
+let terminoFiltroTabla  = '';
+let tiposDctoCatalogo   = [];
+let tiposDctoSeleccionados = new Set();
+let tiposDctoRequestId = 0;
 
 const fmtFecha = (iso) => {
     if (!iso) return '—';
@@ -37,9 +41,14 @@ document.addEventListener('DOMContentLoaded', () => {
         inputFecha.value = new Date().toISOString().split('T')[0];
     }
     inputFecha?.addEventListener('keydown', e => { if (e.key === 'Enter') buscarFacturas(); });
-    inputFecha?.addEventListener('change', validarFormularioBusqueda);
+    inputFecha?.addEventListener('change', () => {
+        validarFormularioBusqueda();
+        cargarTiposDctoDisponibles();
+    });
 
     initCarteraCombobox();
+    initTipoDctoFilter();
+    ocultarPanelTipoDcto();
     cargarTiposCartera();
 });
 
@@ -54,6 +63,10 @@ async function buscarFacturas() {
     if (!cartera) {
         mostrarModal('Cartera requerida', 'Selecciona un tipo de cartera en el listado.', 'warning');
         document.getElementById('inputCarteraFilter')?.focus();
+        return;
+    }
+    if (!tiposDctoSeleccionados.size) {
+        mostrarModal('TIPODCTO requerido', 'Selecciona al menos un TIPODCTO antes de buscar.', 'warning');
         return;
     }
 
@@ -72,6 +85,7 @@ async function buscarFacturas() {
     todosRowItems       = [];
     filtradosActuales   = [];
     modoFiltroFaltantes = false;
+    terminoFiltroTabla  = '';
     const inputBuscar = document.getElementById('inputBuscarTabla');
     if (inputBuscar) inputBuscar.value = '';
 
@@ -98,8 +112,16 @@ async function buscarFacturas() {
 
     try {
         // ── FASE 1: obtener facturas del día ──────────────────────────────────
+        const params = new URLSearchParams({
+            fecha,
+            nombreCartera: cartera,
+        });
+        for (const tipo of tiposDctoSeleccionados) {
+            params.append('tiposDcto', tipo);
+        }
+
         const res = await fetch(
-            `/api/soportes-por-fecha/facturas?fecha=${encodeURIComponent(fecha)}&nombreCartera=${encodeURIComponent(cartera)}`,
+            `/api/soportes-por-fecha/facturas?${params.toString()}`,
             { signal });
 
         loadingEl.classList.add('d-none');
@@ -143,12 +165,11 @@ async function buscarFacturas() {
             };
         });
 
-        todosRowItems = [...rowItems];
-
         if (!pagResultados) pagResultados = new Paginador('resultadosTbody', 'pagResultados');
         pagResultados.setData(rowItems, renderFilaFactura);
         document.getElementById('panelTabla').classList.remove('d-none');
-        actualizarKpi(rowItems.length, 0);
+        filtradosActuales = [...rowItems];
+        actualizarKpi(rowItems.length, contarFilasConSoporte(rowItems));
 
         // Claves únicas TIPODCTO+NRODCTO para consultar soportes (consultasoporte/{clave})
         const clavesDocumento = [...new Set(
@@ -243,6 +264,8 @@ async function buscarFacturas() {
 
         _progresoTimer1 = setTimeout(() => { progBar.classList.add('d-none'); _progresoTimer1 = null; }, 800);
         _progresoTimer2 = setTimeout(() => {
+            todosRowItems = [...rowItems];
+            filtradosActuales = [...rowItems];
             actualizarKpi(rowItems.length, contarFilasConSoporte(rowItems));
             _progresoTimer2 = null;
         }, 900);
@@ -373,16 +396,205 @@ function actualizarKpi(total, encontrados) {
     document.getElementById('btnDescargarListaEncontrados').disabled = encontrados === 0;
     document.getElementById('btnVerFaltantes').disabled            = faltantes === 0;
     document.getElementById('btnDescargarLista').disabled          = faltantes === 0;
-    filtradosActuales = [...todosRowItems];
     actualizarBtnDescargarFiltrados();
     document.getElementById('panelKpi').classList.remove('d-none');
+}
+
+function contarSoportesEnFilas(rowItems) {
+    return rowItems.filter(r => soportesClavePath.has(r.claveSoporte)).length;
+}
+
+function esFiltroTablaActivo() {
+    const hayTexto = terminoFiltroTabla.trim().length > 0;
+    const hayFaltantes = modoFiltroFaltantes;
+    const filtroTipoActivo = todosRowItems.length > 0 && tiposDctoSeleccionados.size > 0;
+    return hayTexto || hayFaltantes || filtroTipoActivo;
+}
+
+function aplicarFiltrosTabla() {
+    if (!pagResultados) return;
+
+    let filas = [...todosRowItems];
+    const q = terminoFiltroTabla.trim().toLowerCase();
+    if (q) {
+        filas = filas.filter(r =>
+            String(r.claveSoporte).toLowerCase().includes(q) ||
+            String(r.tipoDcto).toLowerCase().includes(q) ||
+            String(r.tipoDc).toLowerCase().includes(q) ||
+            String(r.tipoFactura).toLowerCase().includes(q) ||
+            String(r.nroDcto).toLowerCase().includes(q) ||
+            String(r.nit).toLowerCase().includes(q) ||
+            String(r.ordenEntMv).toLowerCase().includes(q) ||
+            String(r.nombreCartera).toLowerCase().includes(q) ||
+            String(r.fechaFactura).toLowerCase().includes(q) ||
+            String(r.fechaOrden).toLowerCase().includes(q) ||
+            String(r.tipoCar).toLowerCase().includes(q) ||
+            textoPlanoEstado(r.estadoHtml).toLowerCase().includes(q)
+        );
+    }
+
+    if (tiposDctoCatalogo.length > 0 && tiposDctoSeleccionados.size > 0) {
+        filas = filas.filter(r => tiposDctoSeleccionados.has(String(r.tipoDcto ?? '').trim()));
+    }
+
+    if (modoFiltroFaltantes) {
+        filas = filas.filter(r => faltantesClaves.includes(r.claveSoporte));
+    }
+
+    filtradosActuales = filas;
+    pagResultados.setData(filas, renderFilaFactura);
+    actualizarKpi(filas.length, contarSoportesEnFilas(filas));
+    actualizarBtnDescargarFiltrados();
+
+    const panelTabla = document.getElementById('panelTabla');
+    const panelVacio  = document.getElementById('panelVacio');
+    if (panelTabla && panelVacio) {
+        if (todosRowItems.length > 0 && filas.length === 0) {
+            panelTabla.classList.add('d-none');
+            panelVacio.querySelector('p').textContent =
+                'No se encontraron facturas con el filtro seleccionado.';
+            panelVacio.classList.remove('d-none');
+        } else {
+            panelVacio.classList.add('d-none');
+            panelTabla.classList.remove('d-none');
+        }
+    }
+}
+
+function configurarFiltroTipoDcto(rowItems) {
+    const tipos = [...new Set(
+        rowItems
+            .map(r => String(r.tipoDcto ?? '').trim())
+            .filter(Boolean)
+    )].sort((a, b) => a.localeCompare(b, 'es'));
+
+    tiposDctoCatalogo = tipos;
+    tiposDctoSeleccionados = new Set(tipos);
+    renderFiltroTipoDcto();
+}
+
+function renderFiltroTipoDcto() {
+    const panel = document.getElementById('panelTipoDcto');
+    const opciones = document.getElementById('tipoDctoOptions');
+    const btn = document.getElementById('btnTipoDcto');
+    const txt = document.getElementById('btnTipoDctoTexto');
+    const estado = document.getElementById('tipoDctoResumen');
+
+    if (!panel || !opciones || !btn || !txt || !estado) return;
+
+    if (!tiposDctoCatalogo.length) {
+        mostrarPanelTipoDctoEspera('No hay TIPODCTO disponibles para esta cartera.');
+        return;
+    }
+
+    panel.classList.remove('d-none');
+    btn.disabled = false;
+
+    opciones.innerHTML = '';
+    tiposDctoCatalogo.forEach((tipo, index) => {
+        const id = `tipoDcto-${index}`;
+        const wrapper = document.createElement('div');
+        wrapper.className = 'form-check tipo-dcto-option';
+        wrapper.innerHTML = `
+            <input class="form-check-input" type="checkbox" id="${id}" data-tipo-dcto="${esc(tipo)}">
+            <label class="form-check-label" for="${id}">${esc(tipo)}</label>
+        `;
+        const input = wrapper.querySelector('input');
+        input.checked = tiposDctoSeleccionados.has(tipo);
+        input.addEventListener('change', () => {
+            if (input.checked) tiposDctoSeleccionados.add(tipo);
+            else tiposDctoSeleccionados.delete(tipo);
+            actualizarEtiquetaTipoDcto();
+            aplicarFiltrosTabla();
+            validarFormularioBusqueda();
+        });
+        opciones.appendChild(wrapper);
+    });
+
+    actualizarEtiquetaTipoDcto();
+    estado.textContent = `${tiposDctoSeleccionados.size} de ${tiposDctoCatalogo.length} TIPODCTO seleccionados`;
+    validarFormularioBusqueda();
+}
+
+function actualizarEtiquetaTipoDcto() {
+    const txt = document.getElementById('btnTipoDctoTexto');
+    const estado = document.getElementById('tipoDctoResumen');
+    const total = tiposDctoCatalogo.length;
+    const sel = tiposDctoSeleccionados.size;
+    if (!txt || !estado) return;
+
+    if (!total) {
+        txt.textContent = 'Sin TIPODCTO disponibles';
+        estado.textContent = 'No hay TIPODCTO para esta cartera.';
+        return;
+    }
+
+    if (sel === total) {
+        txt.textContent = 'Todos los TIPODCTO';
+    } else if (sel === 0) {
+        txt.textContent = 'Sin TIPODCTO seleccionado';
+    } else {
+        txt.textContent = `${sel} TIPODCTO seleccionados`;
+    }
+
+    estado.textContent = `${sel} de ${total} TIPODCTO seleccionados`;
+}
+
+function seleccionarTodosTiposDcto() {
+    tiposDctoSeleccionados = new Set(tiposDctoCatalogo);
+    sincronizarCheckboxesTipoDcto();
+    actualizarEtiquetaTipoDcto();
+    aplicarFiltrosTabla();
+    validarFormularioBusqueda();
+}
+
+function limpiarTiposDcto() {
+    tiposDctoSeleccionados = new Set();
+    sincronizarCheckboxesTipoDcto();
+    actualizarEtiquetaTipoDcto();
+    aplicarFiltrosTabla();
+    validarFormularioBusqueda();
+}
+
+function sincronizarCheckboxesTipoDcto() {
+    document.querySelectorAll('#tipoDctoOptions input[type="checkbox"][data-tipo-dcto]')
+        .forEach(input => {
+            const tipo = (input.getAttribute('data-tipo-dcto') ?? '').trim();
+            input.checked = tiposDctoSeleccionados.has(tipo);
+        });
+}
+
+function ocultarPanelTipoDcto() {
+    const panel = document.getElementById('panelTipoDcto');
+    const btn = document.getElementById('btnTipoDcto');
+    const txt = document.getElementById('btnTipoDctoTexto');
+    const opciones = document.getElementById('tipoDctoOptions');
+    const estado = document.getElementById('tipoDctoResumen');
+    if (panel) panel.classList.add('d-none');
+    if (btn) btn.disabled = true;
+    if (txt) txt.textContent = 'Consulta una cartera para ver TIPODCTO';
+    if (opciones) opciones.innerHTML = '';
+    if (estado) estado.textContent = 'El filtro aparecerá después de consultar la cartera seleccionada.';
+}
+
+function mostrarPanelTipoDctoEspera(mensaje) {
+    const panel = document.getElementById('panelTipoDcto');
+    const btn = document.getElementById('btnTipoDcto');
+    const txt = document.getElementById('btnTipoDctoTexto');
+    const opciones = document.getElementById('tipoDctoOptions');
+    const estado = document.getElementById('tipoDctoResumen');
+
+    if (panel) panel.classList.remove('d-none');
+    if (btn) btn.disabled = true;
+    if (txt) txt.textContent = 'TIPODCTO por cargar';
+    if (opciones) opciones.innerHTML = '';
+    if (estado) estado.textContent = mensaje ?? 'El listado se cargará al consultar la cartera seleccionada.';
 }
 
 function actualizarBtnDescargarFiltrados() {
     const btn      = document.getElementById('btnDescargarFiltrados');
     const btnLista = document.getElementById('btnDescargarListaFiltrados');
-    const termino  = (document.getElementById('inputBuscarTabla')?.value ?? '').trim();
-    const hayFiltro      = termino.length > 0;
+    const hayFiltro      = esFiltroTablaActivo();
     const hayEncontrados = filtradosActuales.some(r => soportesClavePath.has(r.claveSoporte));
     const hayFilas       = filtradosActuales.length > 0;
     if (btn)      btn.disabled      = !(hayFiltro && hayEncontrados);
@@ -393,6 +605,8 @@ function actualizarBtnDescargarFiltrados() {
 function filtrarTabla(termino) {
     if (!pagResultados || !todosRowItems.length) return;
 
+    terminoFiltroTabla = termino ?? '';
+
     if (modoFiltroFaltantes) {
         modoFiltroFaltantes = false;
         const btn = document.getElementById('btnVerFaltantes');
@@ -401,33 +615,7 @@ function filtrarTabla(termino) {
             btn.classList.replace('btn-danger', 'btn-outline-danger');
         }
     }
-
-    const q = termino.trim().toLowerCase();
-    if (!q) {
-        filtradosActuales = [...todosRowItems];
-        pagResultados.setData(todosRowItems, renderFilaFactura);
-        actualizarBtnDescargarFiltrados();
-        return;
-    }
-
-    const filtrados = todosRowItems.filter(r =>
-        String(r.claveSoporte).toLowerCase().includes(q) ||
-        String(r.tipoDcto).toLowerCase().includes(q) ||
-        String(r.tipoDc).toLowerCase().includes(q) ||
-        String(r.tipoFactura).toLowerCase().includes(q) ||
-        String(r.nroDcto).toLowerCase().includes(q) ||
-        String(r.nit).toLowerCase().includes(q) ||
-        String(r.ordenEntMv).toLowerCase().includes(q) ||
-        String(r.nombreCartera).toLowerCase().includes(q) ||
-        String(r.fechaFactura).toLowerCase().includes(q) ||
-        String(r.fechaOrden).toLowerCase().includes(q) ||
-        String(r.tipoCar).toLowerCase().includes(q) ||
-        textoPlanoEstado(r.estadoHtml).toLowerCase().includes(q)
-    );
-
-    filtradosActuales = filtrados;
-    pagResultados.setData(filtrados, renderFilaFactura);
-    actualizarBtnDescargarFiltrados();
+    aplicarFiltrosTabla();
 }
 
 // ── Ver solo faltantes ────────────────────────────────────────────────────────
@@ -440,17 +628,12 @@ function verFaltantes() {
         modoFiltroFaltantes = false;
         btn.textContent = '🔍 Ver';
         btn.classList.replace('btn-danger', 'btn-outline-danger');
-        filtradosActuales = [...todosRowItems];
-        pagResultados.setData(todosRowItems, renderFilaFactura);
     } else {
         modoFiltroFaltantes = true;
         btn.textContent = '🔍 Ver todos';
         btn.classList.replace('btn-outline-danger', 'btn-danger');
-        const faltantes = todosRowItems.filter(r => faltantesClaves.includes(r.claveSoporte));
-        filtradosActuales = faltantes;
-        pagResultados.setData(faltantes, renderFilaFactura);
     }
-    actualizarBtnDescargarFiltrados();
+    aplicarFiltrosTabla();
 }
 
 // ── Descargas CSV ─────────────────────────────────────────────────────────────
@@ -476,7 +659,7 @@ function descargarListaFiltrados() {
 }
 
 function descargarListaEncontrados() {
-    const encontrados = todosRowItems.filter(r => soportesClavePath.has(r.claveSoporte));
+    const encontrados = filtradosActuales.filter(r => soportesClavePath.has(r.claveSoporte));
     if (!encontrados.length) return;
 
     const encabezado = 'Clave,Tipo,Nro. Dcto,OrdenEntMV,Storage Path';
@@ -495,7 +678,7 @@ function descargarListaFaltantes() {
     if (!faltantesClaves.length) return;
 
     const encabezado = 'Clave,Tipo,Nro. Dcto,OrdenEntMV';
-    const filas = todosRowItems
+    const filas = filtradosActuales
         .filter(r => faltantesClaves.includes(r.claveSoporte))
         .map(r => [
             `"${r.claveSoporte}"`,
@@ -547,7 +730,15 @@ function descargarFiltrados() {
 }
 
 async function descargarTodos() {
-    const paths = [...soportesPaths];
+    const vistos = new Set();
+    const paths  = [];
+    for (const r of filtradosActuales) {
+        const path = soportesClavePath.get(r.claveSoporte);
+        if (path && !vistos.has(path)) {
+            paths.push(path);
+            vistos.add(path);
+        }
+    }
     if (!paths.length) return;
     await ejecutarDescargaZip(paths, `soportes_fecha_${fechaActiva ?? 'descarga'}.zip`);
 }
@@ -671,6 +862,58 @@ async function cargarTiposCartera() {
     }
 }
 
+async function cargarTiposDctoDisponibles() {
+    const fecha = document.getElementById('inputFecha')?.value?.trim();
+    const cartera = document.getElementById('inputCarteraValue')?.value?.trim();
+
+    if (!fecha || !cartera) {
+        tiposDctoRequestId += 1;
+        tiposDctoCatalogo = [];
+        tiposDctoSeleccionados = new Set();
+        ocultarPanelTipoDcto();
+        validarFormularioBusqueda();
+        return;
+    }
+
+    const requestId = ++tiposDctoRequestId;
+    mostrarPanelTipoDctoEspera('Cargando TIPODCTO disponibles...');
+    validarFormularioBusqueda();
+
+    try {
+        const params = new URLSearchParams({ fecha, nombreCartera: cartera });
+        const res = await fetch(`/api/soportes-por-fecha/tipos-dcto?${params.toString()}`);
+        if (requestId !== tiposDctoRequestId) return;
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        const data = await res.json();
+        tiposDctoCatalogo = Array.isArray(data)
+            ? [...new Set(data.map(x => String(x ?? '').trim()).filter(Boolean))]
+            : [];
+        tiposDctoSeleccionados = new Set();
+
+        if (!tiposDctoCatalogo.length) {
+            mostrarPanelTipoDctoEspera('No hay TIPODCTO disponibles para esta cartera.');
+            validarFormularioBusqueda();
+            return;
+        }
+
+        renderFiltroTipoDcto();
+        validarFormularioBusqueda();
+    } catch (e) {
+        if (requestId !== tiposDctoRequestId) return;
+        console.error(e);
+        const estado = document.getElementById('tipoDctoResumen');
+        if (estado) {
+            estado.textContent = 'No se pudieron cargar los TIPODCTO disponibles.';
+        }
+        const panel = document.getElementById('panelTipoDcto');
+        if (panel) panel.classList.remove('d-none');
+        const btn = document.getElementById('btnTipoDcto');
+        if (btn) btn.disabled = true;
+        validarFormularioBusqueda();
+    }
+}
+
 function initCarteraCombobox() {
     const input    = document.getElementById('inputCarteraFilter');
     const hidden   = document.getElementById('inputCarteraValue');
@@ -688,6 +931,9 @@ function initCarteraCombobox() {
         carteraHighlight = -1;
         renderCarteraOpciones(input.value);
         abrirListbox(true);
+        tiposDctoCatalogo = [];
+        tiposDctoSeleccionados = new Set();
+        ocultarPanelTipoDcto();
         validarFormularioBusqueda();
     });
 
@@ -722,6 +968,13 @@ function initCarteraCombobox() {
     document.addEventListener('click', e => {
         if (!combobox?.contains(e.target)) abrirListbox(false);
     });
+}
+
+function initTipoDctoFilter() {
+    document.getElementById('btnTipoDctoTodos')
+        ?.addEventListener('click', seleccionarTodosTiposDcto);
+    document.getElementById('btnTipoDctoNinguno')
+        ?.addEventListener('click', limpiarTiposDcto);
 }
 
 function renderCarteraOpciones(filtro) {
@@ -770,6 +1023,7 @@ function seleccionarCartera(nombre) {
     carteraHighlight = -1;
     abrirListbox(false);
     validarFormularioBusqueda();
+    cargarTiposDctoDisponibles();
 }
 
 function abrirListbox(open) {
@@ -784,7 +1038,7 @@ function validarFormularioBusqueda() {
     const fecha   = document.getElementById('inputFecha')?.value?.trim();
     const cartera = document.getElementById('inputCarteraValue')?.value?.trim();
     const btn     = document.getElementById('btnBuscar');
-    if (btn) btn.disabled = !(fecha && cartera);
+    if (btn) btn.disabled = !(fecha && cartera && tiposDctoSeleccionados.size > 0);
 }
 
 // ── Escape HTML ───────────────────────────────────────────────────────────────

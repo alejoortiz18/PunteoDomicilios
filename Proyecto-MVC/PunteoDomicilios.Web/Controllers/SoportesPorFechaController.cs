@@ -55,6 +55,27 @@ public class SoportesPorFechaController : Controller
     }
 
     /// <summary>
+    /// TIPODCTO disponibles para una fecha y cartera seleccionadas.
+    /// GET /api/soportes-por-fecha/tipos-dcto?fecha=2026-05-06&nombreCartera=...
+    /// </summary>
+    [HttpGet("/api/soportes-por-fecha/tipos-dcto")]
+    public async Task<IActionResult> ObtenerTiposDcto(
+        [FromQuery] DateOnly fecha,
+        [FromQuery] string nombreCartera,
+        CancellationToken ct)
+    {
+        var usuario = HttpContext.Session.GetString(SessionKeys.Usuario);
+        if (string.IsNullOrEmpty(usuario))
+            return Unauthorized(new { error = "Sesión no iniciada." });
+
+        if (string.IsNullOrWhiteSpace(nombreCartera))
+            return BadRequest(new { error = "Selecciona un tipo de cartera." });
+
+        var tipos = await _repo.ObtenerTiposDctoAsync(fecha, nombreCartera, ct);
+        return Json(tipos);
+    }
+
+    /// <summary>
     /// Retorna las facturas del ERP para una fecha y cartera.
     /// GET /api/soportes-por-fecha/facturas?fecha=2026-05-06&amp;nombreCartera=...
     /// </summary>
@@ -62,6 +83,7 @@ public class SoportesPorFechaController : Controller
     public async Task<IActionResult> ObtenerFacturas(
         [FromQuery] DateOnly fecha,
         [FromQuery] string nombreCartera,
+        [FromQuery] string[]? tiposDcto,
         CancellationToken ct)
     {
         var usuario = HttpContext.Session.GetString(SessionKeys.Usuario);
@@ -77,7 +99,7 @@ public class SoportesPorFechaController : Controller
 
         try
         {
-            var facturas = await _repo.ObtenerFacturasPorFechaAsync(fecha, nombreCartera, ct);
+            var facturas = await _repo.ObtenerFacturasPorFechaAsync(fecha, nombreCartera, tiposDcto, ct);
             return Json(facturas);
         }
         catch (ArgumentException ex)

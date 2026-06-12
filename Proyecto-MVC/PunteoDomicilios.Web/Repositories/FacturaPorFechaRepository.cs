@@ -36,7 +36,7 @@ public class FacturaPorFechaRepository : IFacturaPorFechaRepository
             .ToList();
     }
 
-    public async Task<IEnumerable<FacturaPorFechaDto>> ObtenerFacturasPorFechaAsync(
+    public async Task<IReadOnlyList<string>> ObtenerTiposDctoAsync(
         DateOnly fecha,
         string nombreCartera,
         CancellationToken ct = default)
@@ -44,21 +44,82 @@ public class FacturaPorFechaRepository : IFacturaPorFechaRepository
         if (string.IsNullOrWhiteSpace(nombreCartera))
             throw new ArgumentException("El nombre de cartera es obligatorio.", nameof(nombreCartera));
 
+        const string sql = """
+            SELECT DISTINCT T.TIPODCTO AS TipoDcto
+            FROM TRADE T
+            INNER JOIN MVTRADE M
+                ON T.ORIGEN   = M.ORIGEN
+                AND T.TIPODCTO = M.TIPODCTO
+                AND T.NRODCTO  = M.NRODCTO
+            INNER JOIN TIPOCAR K
+                ON T.TIPOCAR = K.CODTC
+            INNER JOIN TIPODCTO TD
+                ON TD.TIPODCTO = M.TIPODCTO
+                AND TD.ORIGEN  = M.ORIGEN
+            WHERE TD.DCTOMAE IN ('FR','FA')
+              AND T.FECHA >= @FechaInicio
+              AND T.FECHA < @FechaFin
+              AND K.NOMBRE = @NombreCartera
+              AND T.TIPODCTO IS NOT NULL
+              AND LTRIM(RTRIM(T.TIPODCTO)) <> ''
+            ORDER BY T.TIPODCTO
+            """;
+
+        var fechaInicio = fecha.ToDateTime(TimeOnly.MinValue);
+        var fechaFin = fecha.AddDays(1).ToDateTime(TimeOnly.MinValue);
+
+        await using var conn = new SqlConnection(_connectionString);
+        var rows = await conn.QueryAsync<string>(new CommandDefinition(
+            sql,
+            new
+            {
+                FechaInicio = fechaInicio,
+                FechaFin = fechaFin,
+                NombreCartera = nombreCartera.Trim(),
+            },
+            commandTimeout: 60,
+            cancellationToken: ct));
+
+        return rows
+            .Select(x => x?.Trim())
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Cast<string>()
+            .ToList();
+    }
+
+    public async Task<IEnumerable<FacturaPorFechaDto>> ObtenerFacturasPorFechaAsync(
+        DateOnly fecha,
+        string nombreCartera,
+        IReadOnlyCollection<string>? tiposDcto = null,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(nombreCartera))
+            throw new ArgumentException("El nombre de cartera es obligatorio.", nameof(nombreCartera));
+
         var cartera = nombreCartera.Trim();
+        var tiposSeleccionados = tiposDcto?
+            .Select(t => t?.Trim())
+            .Where(t => !string.IsNullOrWhiteSpace(t))
+            .Select(t => t!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray() ?? [];
+        if (tiposSeleccionados.Length == 0)
+            throw new ArgumentException("Debes seleccionar al menos un TIPODCTO.", nameof(tiposDcto));
+
         _logger.LogDebug(
-            "Consultando facturas | Fecha={Fecha} | Cartera={Cartera}",
-            fecha, cartera);
+            "Consultando facturas | Fecha={Fecha} | Cartera={Cartera} | TiposDctoCount={TiposDctoCount} | TiposDcto={TiposDcto}",
+            fecha, cartera, tiposSeleccionados.Length, string.Join(',', tiposSeleccionados));
 
         try
         {
-            return await EjecutarConsultaAsync(incluirPrefijo: true, fecha, cartera, ct);
+            return await EjecutarConsultaAsync(incluirPrefijo: true, fecha, cartera, tiposSeleccionados, ct);
         }
         catch (SqlException ex)
         {
             _logger.LogWarning(ex,
-                "Fallo SQL con GS_HP_BuscarPrefijo; reintentando sin prefijo | Fecha={Fecha} | Cartera={Cartera}",
-                fecha, cartera);
-            return await EjecutarConsultaAsync(incluirPrefijo: false, fecha, cartera, ct);
+                "Fallo SQL con GS_HP_BuscarPrefijo; reintentando sin prefijo | Fecha={Fecha} | Cartera={Cartera} | TiposDcto={TiposDcto}",
+                fecha, cartera, string.Join(',', tiposSeleccionados));
+            return await EjecutarConsultaAsync(incluirPrefijo: false, fecha, cartera, tiposSeleccionados, ct);
         }
     }
 
@@ -66,6 +127,7 @@ public class FacturaPorFechaRepository : IFacturaPorFechaRepository
         bool incluirPrefijo,
         DateOnly fecha,
         string nombreCartera,
+        IReadOnlyCollection<string> tiposDcto,
         CancellationToken ct)
     {
         await using var conn = new SqlConnection(_connectionString);
@@ -73,6 +135,9 @@ public class FacturaPorFechaRepository : IFacturaPorFechaRepository
         var prefijoExpr = incluirPrefijo
             ? "dbo.GS_HP_BuscarPrefijo(T.ORIGEN, TD.DCTOMAE, T.TIPODCTO)"
             : "NULL";
+
+        var fechaInicio = fecha.ToDateTime(TimeOnly.MinValue);
+        var fechaFin = fecha.AddDays(1).ToDateTime(TimeOnly.MinValue);
 
         var sql = $$"""
             SELECT DISTINCT
@@ -88,23 +153,22 @@ public class FacturaPorFechaRepository : IFacturaPorFechaRepository
                 T.TIPOCAR                                                           AS TipoCar,
                 K.NOMBRE                                                            AS NombreCartera
             FROM TRADE T
-            LEFT JOIN MVTRADE M
+            INNER JOIN MVTRADE M
                 ON T.ORIGEN   = M.ORIGEN
                 AND T.TIPODCTO = M.TIPODCTO
                 AND T.NRODCTO  = M.NRODCTO
-            LEFT JOIN TRADEMAS TM
-                ON T.TIPODCTO = TM.TIPODCTO
-                AND T.NRODCTO  = TM.NRODCTO
             LEFT JOIN MTPROCLI C
                 ON T.NIT = C.NIT
-            LEFT JOIN TIPOCAR K
+            INNER JOIN TIPOCAR K
                 ON T.TIPOCAR = K.CODTC
             INNER JOIN TIPODCTO TD
                 ON TD.TIPODCTO = M.TIPODCTO
                 AND TD.ORIGEN  = M.ORIGEN
             WHERE TD.DCTOMAE IN ('FR','FA')
-              AND CAST(T.FECHA AS DATE) = @Fecha
+              AND T.FECHA >= @FechaInicio
+              AND T.FECHA < @FechaFin
               AND K.NOMBRE = @NombreCartera
+              AND T.TIPODCTO IN @TiposDcto
             ORDER BY TipoFactura ASC
             """;
 
@@ -113,8 +177,10 @@ public class FacturaPorFechaRepository : IFacturaPorFechaRepository
                 sql,
                 new
                 {
-                    Fecha = fecha.ToDateTime(TimeOnly.MinValue),
+                    FechaInicio = fechaInicio,
+                    FechaFin = fechaFin,
                     NombreCartera = nombreCartera,
+                    TiposDcto = tiposDcto,
                 },
                 commandTimeout: 60,
                 cancellationToken: ct));

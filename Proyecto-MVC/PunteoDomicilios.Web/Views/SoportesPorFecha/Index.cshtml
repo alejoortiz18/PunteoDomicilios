@@ -61,6 +61,31 @@
             🔍 Buscar
         </button>
     </div>
+
+    <div id="panelTipoDcto" class="tipo-dcto-panel d-none mt-3">
+        <div class="d-flex align-items-center justify-content-between gap-2 mb-1">
+            <label class="form-label fw-medium small mb-0">TIPODCTO</label>
+            <button id="btnTipoDcto"
+                    type="button"
+                    class="btn btn-outline-secondary btn-sm tipo-dcto-toggle"
+                    disabled>
+                <span id="btnTipoDctoTexto">Consulta una cartera para ver TIPODCTO</span>
+            </button>
+        </div>
+        <div class="tipo-dcto-menu p-3">
+            <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+                <strong class="small">Filtrar TIPODCTO</strong>
+                <div class="d-flex gap-2">
+                    <button type="button" id="btnTipoDctoTodos" class="btn btn-link btn-sm p-0">Todos</button>
+                    <button type="button" id="btnTipoDctoNinguno" class="btn btn-link btn-sm p-0 text-danger">Ninguno</button>
+                </div>
+            </div>
+            <div id="tipoDctoOptions" class="tipo-dcto-options" role="group" aria-label="Listado de TIPODCTO"></div>
+            <div id="tipoDctoResumen" class="form-text text-muted mt-2">
+                El listado se carga después de consultar la cartera seleccionada.
+            </div>
+        </div>
+    </div>
 </section>
 
 <!-- Sección de resultados (oculta hasta buscar) -->

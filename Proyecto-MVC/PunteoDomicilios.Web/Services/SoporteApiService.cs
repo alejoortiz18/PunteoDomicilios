@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Net.Http.Json;
 using System.Runtime.CompilerServices;
+using System.Diagnostics;
 using System.Text.Json;
 using System.Threading.Channels;
 using Microsoft.Extensions.Caching.Memory;
@@ -323,15 +324,19 @@ public class SoporteApiService : ISoporteApiService
         var lista = nrodctos.Select(n => n.Trim()).Distinct().ToList();
         if (lista.Count == 0) yield break;
 
+        var swTotal = Stopwatch.StartNew();
         var channel = Channel.CreateUnbounded<NrodctoEstadoDto>(
             new UnboundedChannelOptions { SingleWriter = false, SingleReader = true });
 
         // Pre-calentar L2: un solo query SQL para cargar caché L1 antes del paralelo
+        Dictionary<string, SoporteDataItem> sqlHits = new(StringComparer.OrdinalIgnoreCase);
         if (_cacheLocalHabilitado)
         {
             try
             {
-                var sqlHits = await _cacheRepo.ObtenerBatchAsync(lista, CancellationToken.None);
+                var swCache = Stopwatch.StartNew();
+                sqlHits = await _cacheRepo.ObtenerBatchAsync(lista, CancellationToken.None);
+                swCache.Stop();
                 int enc = 0, falt = 0;
                 foreach (var (nrodcto, item) in sqlHits)
                 {
@@ -352,6 +357,8 @@ public class SoporteApiService : ISoporteApiService
                 }
                 _logger.LogDebug("Stream pre-calentamiento L2: {Enc} encontrados + {Falt} faltantes / {Total} total",
                     enc, falt, lista.Count);
+                _logger.LogDebug("Stream L2 batch en {Ms}ms | CacheHits={Hits} | Total={Total}",
+                    swCache.ElapsedMilliseconds, sqlHits.Count, lista.Count);
             }
             catch (Exception ex)
             {
@@ -359,12 +366,44 @@ public class SoporteApiService : ISoporteApiService
             }
         }
 
+        var pendientes = sqlHits.Count > 0
+            ? lista.Where(n => !sqlHits.ContainsKey(n)).ToList()
+            : lista;
+
+        async Task EmitirCacheAsync()
+        {
+            foreach (var nrodcto in lista)
+            {
+                if (!sqlHits.TryGetValue(nrodcto, out var item)) continue;
+
+                var estado = item.Storage_Path == SqlDocumentoCacheRepository.FALTANTE_SENTINEL
+                    ? new NrodctoEstadoDto(nrodcto, EstadoSoporte.Faltante, null, null, null, "Sin soporte")
+                    : new NrodctoEstadoDto(nrodcto, EstadoSoporte.Encontrado, item.FechaRegistro, item.Storage_Disk, item.Storage_Path, null);
+
+                await channel.Writer.WriteAsync(estado, CancellationToken.None);
+            }
+        }
+
+        // Los resultados cacheados salen primero, sin esperar a la API externa.
+        await EmitirCacheAsync();
+
+        if (pendientes.Count == 0)
+        {
+            channel.Writer.Complete();
+            swTotal.Stop();
+            _logger.LogDebug("Stream finalizado solo con caché en {Ms}ms | Total={Total}",
+                swTotal.ElapsedMilliseconds, lista.Count);
+            await foreach (var item in channel.Reader.ReadAllAsync(ct))
+                yield return item;
+            yield break;
+        }
+
         // Procesar en paralelo; cada resultado se escribe al channel en cuanto resuelve
         _ = Task.Run(async () =>
         {
             try
             {
-                await Parallel.ForEachAsync(lista, CancellationToken.None, async (nrodcto, _) =>
+                await Parallel.ForEachAsync(pendientes, CancellationToken.None, async (nrodcto, _) =>
                 {
                     NrodctoEstadoDto estado;
                     try
@@ -383,6 +422,9 @@ public class SoporteApiService : ISoporteApiService
             finally
             {
                 channel.Writer.Complete();
+                swTotal.Stop();
+                _logger.LogDebug("Stream finalizado en {Ms}ms | Total={Total} | Pendientes={Pendientes}",
+                    swTotal.ElapsedMilliseconds, lista.Count, pendientes.Count);
             }
         }, CancellationToken.None);
 

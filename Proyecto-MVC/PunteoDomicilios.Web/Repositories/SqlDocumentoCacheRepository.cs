@@ -105,20 +105,30 @@ public class SqlDocumentoCacheRepository : IDocumentoCacheRepository
             return new Dictionary<string, SoporteDataItem>(StringComparer.OrdinalIgnoreCase);
 
         // Trae tanto encontrados como faltantes (centinela FALTANTE) para evitar llamadas innecesarias al API.
+        // En lotes grandes, dividir la consulta evita listas de parámetros demasiado extensas.
         const string sql = """
             SELECT NumeroDocumento, FechaRegistro, StorageDisk, StoragePath
             FROM   DocumentosIndexados
             WHERE  NumeroDocumento IN @Lista
             """;
 
-        await using var conn = new SqlConnection(_connectionString);
-        var rows = await conn.QueryAsync<DocumentoBatchRow>(
-            new CommandDefinition(sql, new { Lista = lista }, cancellationToken: ct));
+        const int chunkSize = 500;
+        var resultado = new Dictionary<string, SoporteDataItem>(StringComparer.OrdinalIgnoreCase);
 
-        var resultado = rows.ToDictionary(
-            r => r.NumeroDocumento,
-            r => new SoporteDataItem(r.FechaRegistro ?? string.Empty, r.StorageDisk ?? string.Empty, r.StoragePath ?? string.Empty),
-            StringComparer.OrdinalIgnoreCase);
+        foreach (var chunk in lista.Chunk(chunkSize))
+        {
+            await using var conn = new SqlConnection(_connectionString);
+            var rows = await conn.QueryAsync<DocumentoBatchRow>(
+                new CommandDefinition(sql, new { Lista = chunk }, cancellationToken: ct));
+
+            foreach (var row in rows)
+            {
+                resultado[row.NumeroDocumento] = new SoporteDataItem(
+                    row.FechaRegistro ?? string.Empty,
+                    row.StorageDisk ?? string.Empty,
+                    row.StoragePath ?? string.Empty);
+            }
+        }
 
         var encontrados = resultado.Count(kvp => kvp.Value.Storage_Path != FALTANTE_SENTINEL);
         var faltantes   = resultado.Count - encontrados;
